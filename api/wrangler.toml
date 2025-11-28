@@ -1,0 +1,14 @@
+name = "sharex-image-host"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+BASE_URL = "https://formality.life"
+
+# Set this secret via: wrangler secret put API_KEY
+# [vars]
+# API_KEY = "your-api-key"  # Don't put secrets here, use `wrangler secret put`
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "sharex-host"  # Change to your bucket name
