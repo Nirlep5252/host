@@ -8,20 +8,26 @@ const me = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 me.get("/", authMiddleware, async (c) => {
   const user = c.get("user");
-  const db = createDb(c.env.DATABASE_URL);
 
-  const [stats] = await db
-    .select({ count: count() })
-    .from(images)
-    .where(and(eq(images.userId, user.id), isNull(images.deletedAt)));
+  try {
+    const db = createDb(c.env.DATABASE_URL);
 
-  return c.json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.createdAt,
-    imageCount: stats?.count || 0,
-  });
+    const [stats] = await db
+      .select({ count: count() })
+      .from(images)
+      .where(and(eq(images.userId, user.id), isNull(images.deletedAt)));
+
+    return c.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+      imageCount: stats?.count || 0,
+    });
+  } catch (error) {
+    console.error("Failed to fetch user info:", error);
+    return c.json({ error: "Failed to fetch user info" }, 500);
+  }
 });
 
 export default me;

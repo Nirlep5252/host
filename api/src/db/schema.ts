@@ -11,7 +11,7 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).unique().notNull(),
   name: varchar("name", { length: 255 }),
-  apiKeyHash: varchar("api_key_hash", { length: 255 }).notNull(),
+  apiKeyHash: varchar("api_key_hash", { length: 64 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   isActive: boolean("is_active").default(true).notNull(),
 });

@@ -1,12 +1,39 @@
 import { createMiddleware } from "hono/factory";
-import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+import { eq, and } from "drizzle-orm";
 import { createDb, users, type User } from "../db";
 import type { Bindings } from "../types";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import type { PgDatabase } from "drizzle-orm/pg-core";
 
 type AuthVariables = {
   user: User;
 };
+
+export async function hashApiKey(apiKey: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(apiKey);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function verifyApiKey(
+  db: ReturnType<typeof createDb>,
+  apiKey: string
+): Promise<User | null> {
+  if (!apiKey || !apiKey.startsWith("sk_")) {
+    return null;
+  }
+
+  const hashedKey = await hashApiKey(apiKey);
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.apiKeyHash, hashedKey), eq(users.isActive, true)));
+
+  return user || null;
+}
 
 export const authMiddleware = createMiddleware<{
   Bindings: Bindings;
@@ -19,15 +46,7 @@ export const authMiddleware = createMiddleware<{
   }
 
   const db = createDb(c.env.DATABASE_URL);
-  const allUsers = await db.select().from(users).where(eq(users.isActive, true));
-
-  let matchedUser: User | null = null;
-  for (const user of allUsers) {
-    if (await bcrypt.compare(apiKey, user.apiKeyHash)) {
-      matchedUser = user;
-      break;
-    }
-  }
+  const matchedUser = await verifyApiKey(db, apiKey);
 
   if (!matchedUser) {
     return c.json({ error: "Invalid API key" }, 401);
