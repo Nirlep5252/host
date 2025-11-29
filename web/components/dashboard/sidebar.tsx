@@ -113,9 +113,9 @@ export function Sidebar() {
       <div className="flex h-16 items-center px-5">
         <Link href="/" className="group flex items-center gap-1.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-[--radius-md] bg-accent/10 transition-colors duration-200 group-hover:bg-accent/20">
-            <svg className="h-4 w-4 text-accent" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" />
-              <path d="M8 10l2.5 3L14 9l4 5H6l2-4z" fill="var(--bg-secondary)" />
+            <svg className="h-5 w-5" viewBox="0 0 32 32" fill="none">
+              <text x="4" y="26" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="700" fill="#fafafa">f</text>
+              <circle cx="24" cy="24" r="4" fill="#D946EF"/>
             </svg>
           </div>
           <span className="font-[family-name:var(--font-display)] text-base font-semibold tracking-tight">
