@@ -22,8 +22,8 @@ const instrumentSans = Instrument_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Host - Image Hosting",
-  description: "Your images. Your control.",
+  title: "formality.life - Image Hosting",
+  description: "Yet another image hosting platform.",
 };
 
 export default function RootLayout({

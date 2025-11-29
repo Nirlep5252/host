@@ -44,9 +44,9 @@ export default function LoginPage() {
         <div className="mb-8 text-center">
           <div className="relative inline-block">
             <div className="absolute -inset-4 rounded-full bg-accent/20 blur-2xl" />
-            <h1 className="font-[family-name:var(--font-display)] relative text-4xl font-bold tracking-tight">
-              <span className="text-text-primary">Host</span>
-              <span className="text-accent">.</span>
+            <h1 className="font-[family-name:var(--font-display)] relative text-3xl font-bold tracking-tight">
+              <span className="text-text-primary">formality</span>
+              <span className="text-accent">.life</span>
             </h1>
           </div>
           <p className="mt-4 text-text-secondary">

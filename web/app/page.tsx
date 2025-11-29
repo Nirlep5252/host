@@ -6,13 +6,13 @@ export default function Home() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-bg-primary">
       <div className="relative inline-block">
         <div className="absolute -inset-4 rounded-full bg-accent/20 blur-2xl" />
-        <h1 className="font-[family-name:var(--font-display)] relative text-6xl font-bold tracking-tight sm:text-7xl">
-          <span className="text-text-primary">Host</span>
-          <span className="text-accent">.</span>
+        <h1 className="font-[family-name:var(--font-display)] relative text-5xl font-bold tracking-tight sm:text-6xl">
+          <span className="text-text-primary">formality</span>
+          <span className="text-accent">.life</span>
         </h1>
       </div>
       <p className="mt-6 text-lg text-text-secondary">
-        Your images. Your control.
+        Yet another image hosting platform.
       </p>
       <div className="mt-8">
         <Link href="/dashboard">
