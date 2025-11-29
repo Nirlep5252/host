@@ -5,6 +5,7 @@ export type Bindings = {
   R2: R2Bucket;
   DATABASE_URL: string;
   ADMIN_KEY: string;
+  ADMIN_EMAIL: string;
   BASE_URL: string;
 };
 

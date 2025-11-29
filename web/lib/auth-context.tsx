@@ -8,18 +8,23 @@ import {
   useCallback,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { userQuery } from "./api";
+import { userQuery, adminClient } from "./api";
 import type { User } from "./api";
 
 const STORAGE_KEY = "host_api_key";
+const ADMIN_STORAGE_KEY = "host_admin_key";
 
 interface AuthContextType {
   apiKey: string | null;
+  adminKey: string | null;
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   login: (apiKey: string) => Promise<void>;
   logout: () => void;
+  setAdminKey: (adminKey: string) => Promise<void>;
+  clearAdminKey: () => void;
   error: string | null;
 }
 
@@ -27,14 +32,19 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [adminKey, setAdminKeyState] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      setApiKey(stored);
+    const storedApiKey = localStorage.getItem(STORAGE_KEY);
+    const storedAdminKey = localStorage.getItem(ADMIN_STORAGE_KEY);
+    if (storedApiKey) {
+      setApiKey(storedApiKey);
+    }
+    if (storedAdminKey) {
+      setAdminKeyState(storedAdminKey);
     }
     setIsInitialized(true);
   }, []);
@@ -83,22 +93,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ADMIN_STORAGE_KEY);
     setApiKey(null);
+    setAdminKeyState(null);
     setLoginError(null);
     queryClient.clear();
   }, [queryClient]);
 
+  const setAdminKey = useCallback(async (newAdminKey: string) => {
+    try {
+      await adminClient("/admin/users", newAdminKey);
+      localStorage.setItem(ADMIN_STORAGE_KEY, newAdminKey);
+      setAdminKeyState(newAdminKey);
+    } catch {
+      throw new Error("Invalid admin key");
+    }
+  }, []);
+
+  const clearAdminKey = useCallback(() => {
+    localStorage.removeItem(ADMIN_STORAGE_KEY);
+    setAdminKeyState(null);
+    queryClient.invalidateQueries({ queryKey: ["admin"] });
+  }, [queryClient]);
+
   const isLoading = !isInitialized || (!!apiKey && isUserLoading);
+  const isAdmin = user?.isAdmin ?? false;
 
   return (
     <AuthContext.Provider
       value={{
         apiKey,
+        adminKey,
         user: user ?? null,
         isLoading,
         isAuthenticated: !!apiKey && !!user,
+        isAdmin,
         login,
         logout,
+        setAdminKey,
+        clearAdminKey,
         error: loginError,
       }}
     >

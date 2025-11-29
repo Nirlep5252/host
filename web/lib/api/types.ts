@@ -4,6 +4,45 @@ export interface User {
   name: string | null;
   createdAt: string;
   imageCount: number;
+  isAdmin: boolean;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUser[];
+}
+
+export interface AdminCreateUserRequest {
+  email: string;
+  name?: string;
+}
+
+export interface AdminCreateUserResponse {
+  id: string;
+  email: string;
+  name: string | null;
+  apiKey: string;
+  createdAt: string;
+}
+
+export interface AdminDeleteUserResponse {
+  success: boolean;
+  id: string;
+}
+
+export interface AdminRegenerateKeyResponse {
+  id: string;
+  email: string;
+  name: string | null;
+  apiKey: string;
+  createdAt: string;
 }
 
 export interface Image {

@@ -6,6 +6,20 @@ export type {
   UploadResponse,
   UpdateImageResponse,
   DeleteImageResponse,
+  AdminUser,
+  AdminUsersResponse,
+  AdminCreateUserRequest,
+  AdminCreateUserResponse,
+  AdminDeleteUserResponse,
+  AdminRegenerateKeyResponse,
 } from "./types";
 export { userKeys, imageKeys, userQuery, imagesQuery } from "./queries";
 export { useUploadImage, useUpdateImage, useDeleteImage } from "./mutations";
+export {
+  adminClient,
+  adminKeys,
+  adminUsersQuery,
+  useAdminCreateUser,
+  useAdminDeleteUser,
+  useAdminRegenerateKey,
+} from "./admin";

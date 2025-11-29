@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 
 const navItems = [
   {
@@ -20,8 +21,26 @@ const navItems = [
   },
 ];
 
+const adminNavItems = [
+  {
+    label: "Admin",
+    href: "/dashboard/admin",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+        />
+      </svg>
+    ),
+  },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { isAdmin } = useAuth();
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border-subtle bg-bg-secondary">
@@ -52,6 +71,29 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {isAdmin && (
+          <>
+            <div className="my-4 h-px bg-border-subtle" />
+            {adminNavItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 rounded-[--radius-sm] px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-accent/10 text-accent"
+                      : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
     </aside>

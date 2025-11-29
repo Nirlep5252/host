@@ -23,6 +23,7 @@ me.get("/", authMiddleware, async (c) => {
       name: user.name,
       createdAt: user.createdAt,
       imageCount: stats?.count || 0,
+      isAdmin: user.email === c.env.ADMIN_EMAIL,
     });
   } catch (error) {
     console.error("Failed to fetch user info:", error);

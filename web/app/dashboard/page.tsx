@@ -2,11 +2,12 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useToast } from "@/components/ui";
+import { useToast, Button } from "@/components/ui";
 import { useUploadImage } from "@/lib/api";
 import { ImageGrid } from "@/components/dashboard/image-grid";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
+import { fadeIn, scaleIn, transition } from "@/lib/motion";
 
 export default function DashboardPage() {
   const { user, apiKey } = useAuth();
@@ -86,10 +87,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Upload button */}
-        <button
-          onClick={() => setIsUploadExpanded(!isUploadExpanded)}
-          className="group flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-medium text-black transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20"
-        >
+        <Button variant="primary" onClick={() => setIsUploadExpanded(!isUploadExpanded)}>
           <svg
             className={`h-4 w-4 transition-transform duration-200 ${isUploadExpanded ? "rotate-45" : ""}`}
             fill="none"
@@ -99,7 +97,7 @@ export default function DashboardPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Upload
-        </button>
+        </Button>
       </div>
 
       {/* Expanded upload zone */}
@@ -109,7 +107,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0, height: 0, marginBottom: 0 }}
             animate={{ opacity: 1, height: "auto", marginBottom: 32 }}
             exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={transition.normal}
             className="overflow-hidden"
           >
             <div
@@ -162,15 +160,17 @@ export default function DashboardPage() {
       <AnimatePresence>
         {isDraggingOver && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={fadeIn.initial}
+            animate={fadeIn.animate}
+            exit={fadeIn.exit}
+            transition={transition.fast}
             className="fixed inset-0 z-50 flex items-center justify-center bg-bg-primary/90 backdrop-blur-sm"
           >
             <div className="flex flex-col items-center gap-4">
               <motion.div
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
+                initial={scaleIn.initial}
+                animate={scaleIn.animate}
+                transition={transition.normal}
                 className="flex h-24 w-24 items-center justify-center rounded-full bg-accent/20"
               >
                 <svg className="h-12 w-12 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
