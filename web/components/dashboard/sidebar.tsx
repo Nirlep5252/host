@@ -77,7 +77,35 @@ function NavItem({
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin, logout, apiKey } = useAuth();
+
+  const handleDownloadShareXConfig = () => {
+    const config = {
+      Version: "16.0.0",
+      Name: "formality.life",
+      DestinationType: "ImageUploader",
+      RequestMethod: "POST",
+      RequestURL: "https://formality.life/upload",
+      Headers: {
+        "X-API-Key": apiKey,
+      },
+      Body: "MultipartFormData",
+      FileFormName: "file",
+      URL: "{json:url}",
+    };
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "formality-life.sxcu";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col border-r border-border-subtle bg-bg-secondary/80 backdrop-blur-xl">
@@ -140,7 +168,18 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="border-t border-border-subtle p-3">
+      <div className="border-t border-border-subtle p-3 space-y-1">
+        <button
+          onClick={handleDownloadShareXConfig}
+          className="group flex w-full items-center gap-3 rounded-[--radius-md] px-3 py-2.5 text-text-muted transition-all duration-200 hover:bg-accent-muted hover:text-accent"
+        >
+          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 15V3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-sm font-medium">ShareX Config</span>
+        </button>
         <button
           onClick={logout}
           className="group flex w-full items-center gap-3 rounded-[--radius-md] px-3 py-2.5 text-text-muted transition-all duration-200 hover:bg-error-muted hover:text-error"
