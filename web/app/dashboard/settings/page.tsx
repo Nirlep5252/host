@@ -82,8 +82,8 @@ export default function SettingsPage() {
         )}
 
         <div className="flex items-center gap-3">
-          <div className="flex-1 rounded-[--radius-md] border border-border-default bg-bg-tertiary px-4 py-3 font-mono text-sm text-text-primary">
-            {displayKey}
+          <div className="flex-1 overflow-hidden rounded-[--radius-md] border border-border-default bg-bg-tertiary px-4 py-3 font-[family-name:var(--font-geist-mono)] text-sm text-text-primary tracking-wide">
+            <span className="block truncate">{displayKey}</span>
           </div>
 
           <Button
