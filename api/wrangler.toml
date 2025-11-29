@@ -5,10 +5,25 @@ compatibility_date = "2024-12-01"
 [vars]
 BASE_URL = "https://formality.life"
 
-# Set this secret via: wrangler secret put API_KEY
-# [vars]
-# API_KEY = "your-api-key"  # Don't put secrets here, use `wrangler secret put`
+# Set secrets via:
+#   wrangler secret put DATABASE_URL
+#   wrangler secret put ADMIN_KEY
 
 [[r2_buckets]]
 binding = "R2"
-bucket_name = "sharex-host"  # Change to your bucket name
+bucket_name = "sharex-host"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1

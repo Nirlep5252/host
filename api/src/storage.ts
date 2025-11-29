@@ -20,7 +20,7 @@ export async function getFile(
   if (!object) return null;
 
   return {
-    body: object.body,
+    body: object.body as unknown as ReadableStream,
     contentType: object.httpMetadata?.contentType || "application/octet-stream",
   };
 }
