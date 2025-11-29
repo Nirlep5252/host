@@ -31,17 +31,27 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+      const checkResponse = await fetch(`${API_URL}/auth/check-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const { exists } = await checkResponse.json();
+
+      if (!exists) {
+        setError("No account found with this email. Join the waitlist to get access.");
+        return;
+      }
+
       const { error } = await authClient.signIn.magicLink({
         email,
         callbackURL: `${FRONTEND_URL}/dashboard`,
       });
 
       if (error) {
-        if (error.message?.includes("User not found") || error.code === "USER_NOT_FOUND") {
-          setError("No account found with this email. Join the waitlist to get access.");
-        } else {
-          setError(error.message || "Failed to send magic link");
-        }
+        setError(error.message || "Failed to send magic link");
         return;
       }
 

@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
+import { eq } from "drizzle-orm";
 import { Resend } from "resend";
 import type { Database } from "../db";
 import * as schema from "../db/schema";
@@ -27,6 +28,16 @@ export function createAuth(db: Database, env: Bindings) {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
+          const existingUser = await db
+            .select({ id: schema.users.id })
+            .from(schema.users)
+            .where(eq(schema.users.email, email))
+            .limit(1);
+
+          if (existingUser.length === 0) {
+            return;
+          }
+
           await resend.emails.send({
             from: "formality.life <noreply@formality.life>",
             to: email,

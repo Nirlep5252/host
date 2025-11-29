@@ -8,6 +8,7 @@ import imagesRoute from "./routes/images";
 import admin from "./routes/admin";
 import me from "./routes/me";
 import waitlistRoute from "./routes/waitlist";
+import authRoute from "./routes/auth";
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -39,5 +40,6 @@ app.route("/images", imagesRoute);
 app.route("/admin", admin);
 app.route("/me", me);
 app.route("/waitlist", waitlistRoute);
+app.route("/auth", authRoute);
 
 export default app;
