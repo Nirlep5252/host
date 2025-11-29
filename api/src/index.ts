@@ -22,7 +22,7 @@ app.use(
 );
 
 app.get("/", (c) => {
-  return c.json({ status: "ok", message: "Image upload API" });
+  return c.redirect("https://web.formality.life");
 });
 
 app.route("/upload", upload);
