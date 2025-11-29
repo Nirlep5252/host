@@ -21,9 +21,37 @@ waitlistRoute.post("/", async (c) => {
     }
 
     const email = body.email.toLowerCase().trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+    if (email.length > 254) {
+      return c.json({ error: "Email is too long" }, 400);
+    }
+
     if (!emailRegex.test(email)) {
       return c.json({ error: "Invalid email format" }, 400);
+    }
+
+    const [localPart] = email.split("@");
+    if (!localPart || localPart.length > 64) {
+      return c.json({ error: "Invalid email format" }, 400);
+    }
+
+    if (body.name !== undefined && body.name !== null) {
+      if (typeof body.name !== "string") {
+        return c.json({ error: "Name must be a string" }, 400);
+      }
+      if (body.name.length > 255) {
+        return c.json({ error: "Name must be 255 characters or less" }, 400);
+      }
+    }
+
+    if (body.reason !== undefined && body.reason !== null) {
+      if (typeof body.reason !== "string") {
+        return c.json({ error: "Reason must be a string" }, 400);
+      }
+      if (body.reason.length > 2000) {
+        return c.json({ error: "Reason must be 2000 characters or less" }, 400);
+      }
     }
 
     const db = createDb(c.env.DATABASE_URL);

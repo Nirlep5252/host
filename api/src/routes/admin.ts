@@ -6,6 +6,8 @@ import { adminMiddleware, hashApiKey } from "../middleware/auth";
 import { adminRateLimit } from "../middleware/rate-limit";
 import type { Bindings } from "../types";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const admin = new Hono<{ Bindings: Bindings }>();
 
 admin.use("/*", adminRateLimit);
@@ -134,6 +136,11 @@ admin.get("/waitlist", async (c) => {
     const db = createDb(c.env.DATABASE_URL);
     const status = c.req.query("status");
 
+    const VALID_STATUSES = ["pending", "approved", "rejected"];
+    if (status && !VALID_STATUSES.includes(status)) {
+      return c.json({ error: "Invalid status parameter. Must be: pending, approved, or rejected" }, 400);
+    }
+
     let query = db
       .select()
       .from(waitlist)
@@ -178,6 +185,10 @@ admin.get("/waitlist", async (c) => {
 
 admin.post("/waitlist/:id/approve", async (c) => {
   const id = c.req.param("id");
+
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: "Invalid ID format" }, 400);
+  }
 
   try {
     const db = createDb(c.env.DATABASE_URL);
@@ -244,6 +255,10 @@ admin.post("/waitlist/:id/approve", async (c) => {
 admin.post("/waitlist/:id/reject", async (c) => {
   const id = c.req.param("id");
 
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: "Invalid ID format" }, 400);
+  }
+
   try {
     const db = createDb(c.env.DATABASE_URL);
 
@@ -277,6 +292,10 @@ admin.post("/waitlist/:id/reject", async (c) => {
 
 admin.delete("/waitlist/:id", async (c) => {
   const id = c.req.param("id");
+
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: "Invalid ID format" }, 400);
+  }
 
   try {
     const db = createDb(c.env.DATABASE_URL);
