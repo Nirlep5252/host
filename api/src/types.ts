@@ -1,5 +1,5 @@
 import type { R2Bucket } from "@cloudflare/workers-types";
-import type { User } from "./db";
+import type { User, Session } from "./db";
 
 export type Bindings = {
   R2: R2Bucket;
@@ -8,8 +8,12 @@ export type Bindings = {
   ADMIN_EMAIL: string;
   BASE_URL: string;
   TOKEN_SECRET: string;
+  RESEND_API_KEY: string;
+  BETTER_AUTH_SECRET: string;
 };
 
 export type Variables = {
   user: User;
+  session: Session | null;
+  sessionUser: User | null;
 };

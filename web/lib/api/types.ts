@@ -5,6 +5,7 @@ export interface User {
   createdAt: string;
   imageCount: number;
   isAdmin: boolean;
+  hasApiKey?: boolean;
 }
 
 export interface AdminUser {

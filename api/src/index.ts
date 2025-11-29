@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Bindings, Variables } from "./types";
+import { createDb } from "./db";
+import { createAuth } from "./lib/auth";
 import upload from "./routes/upload";
 import imagesRoute from "./routes/images";
 import admin from "./routes/admin";
@@ -20,6 +22,12 @@ app.use(
     credentials: true,
   })
 );
+
+app.on(["POST", "GET"], "/api/auth/*", async (c) => {
+  const db = createDb(c.env.DATABASE_URL);
+  const auth = createAuth(db, c.env);
+  return auth.handler(c.req.raw);
+});
 
 app.get("/", (c) => {
   return c.redirect("https://web.formality.life");

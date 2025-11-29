@@ -8,11 +8,22 @@ import {
   useCallback,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { userQuery, adminClient } from "./api";
-import type { User } from "./api";
+import { useSession, signOut as betterAuthSignOut } from "./auth-client";
+import { adminClient } from "./api";
 
-const STORAGE_KEY = "host_api_key";
+const API_KEY_STORAGE_KEY = "host_api_key";
 const ADMIN_STORAGE_KEY = "host_admin_key";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+  imageCount?: number;
+  isAdmin?: boolean;
+  hasApiKey?: boolean;
+}
 
 interface AuthContextType {
   apiKey: string | null;
@@ -21,27 +32,45 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  login: (apiKey: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   setAdminKey: (adminKey: string) => Promise<void>;
   clearAdminKey: () => void;
-  error: string | null;
+  regenerateApiKey: () => Promise<string>;
+  setApiKey: (key: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+async function fetchUserDetails(): Promise<User> {
+  const response = await fetch(`${API_BASE_URL}/me`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch user details");
+  }
+  return response.json();
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKey, setApiKeyState] = useState<string | null>(null);
   const [adminKey, setAdminKeyState] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  const { data: session, isPending: isSessionLoading } = useSession();
+
+  const { data: userDetails, isLoading: isUserDetailsLoading } = useQuery({
+    queryKey: ["user-details"],
+    queryFn: fetchUserDetails,
+    enabled: !!session?.user,
+    retry: false,
+  });
+
   useEffect(() => {
-    const storedApiKey = localStorage.getItem(STORAGE_KEY);
+    const storedApiKey = localStorage.getItem(API_KEY_STORAGE_KEY);
     const storedAdminKey = localStorage.getItem(ADMIN_STORAGE_KEY);
     if (storedApiKey) {
-      setApiKey(storedApiKey);
+      setApiKeyState(storedApiKey);
     }
     if (storedAdminKey) {
       setAdminKeyState(storedAdminKey);
@@ -49,55 +78,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsInitialized(true);
   }, []);
 
-  const {
-    data: user,
-    isLoading: isUserLoading,
-    error: queryError,
-  } = useQuery({
-    ...userQuery(apiKey || ""),
-    enabled: !!apiKey && isInitialized,
-    retry: false,
-  });
-
-  useEffect(() => {
-    if (queryError && apiKey) {
-      localStorage.removeItem(STORAGE_KEY);
-      setApiKey(null);
-      setLoginError("Invalid API key");
-    }
-  }, [queryError, apiKey]);
-
-  const login = useCallback(async (newApiKey: string) => {
-    setLoginError(null);
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "https://formality.life"}/me`,
-        {
-          headers: { "X-API-Key": newApiKey },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Invalid API key");
+  const user: User | null = userDetails || (session?.user
+    ? {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        createdAt: session.user.createdAt?.toString() || new Date().toISOString(),
+        isAdmin: false,
       }
+    : null);
 
-      localStorage.setItem(STORAGE_KEY, newApiKey);
-      setApiKey(newApiKey);
-      queryClient.invalidateQueries({ queryKey: ["user"] });
-    } catch {
-      setLoginError("Invalid API key");
-      throw new Error("Invalid API key");
-    }
-  }, [queryClient]);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+  const logout = useCallback(async () => {
+    localStorage.removeItem(API_KEY_STORAGE_KEY);
     localStorage.removeItem(ADMIN_STORAGE_KEY);
-    setApiKey(null);
+    setApiKeyState(null);
     setAdminKeyState(null);
-    setLoginError(null);
     queryClient.clear();
+    await betterAuthSignOut();
   }, [queryClient]);
 
   const setAdminKey = useCallback(async (newAdminKey: string) => {
@@ -116,7 +113,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryClient.invalidateQueries({ queryKey: ["admin"] });
   }, [queryClient]);
 
-  const isLoading = !isInitialized || (!!apiKey && isUserLoading);
+  const regenerateApiKey = useCallback(async (): Promise<string> => {
+    const response = await fetch(
+      `${API_BASE_URL}/me/regenerate-key`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to regenerate API key");
+    }
+
+    const data = await response.json();
+    const newKey = data.apiKey;
+
+    localStorage.setItem(API_KEY_STORAGE_KEY, newKey);
+    setApiKeyState(newKey);
+
+    return newKey;
+  }, []);
+
+  const setApiKey = useCallback((key: string) => {
+    localStorage.setItem(API_KEY_STORAGE_KEY, key);
+    setApiKeyState(key);
+  }, []);
+
+  const isLoading = !isInitialized || isSessionLoading || (!!session?.user && isUserDetailsLoading);
+  const isAuthenticated = !!session?.user;
   const isAdmin = user?.isAdmin ?? false;
 
   return (
@@ -124,15 +149,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         apiKey,
         adminKey,
-        user: user ?? null,
+        user,
         isLoading,
-        isAuthenticated: !!apiKey && !!user,
+        isAuthenticated,
         isAdmin,
-        login,
         logout,
         setAdminKey,
         clearAdminKey,
-        error: loginError,
+        regenerateApiKey,
+        setApiKey,
       }}
     >
       {children}

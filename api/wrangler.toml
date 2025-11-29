@@ -1,6 +1,7 @@
 name = "sharex-image-host"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 BASE_URL = "https://formality.life"

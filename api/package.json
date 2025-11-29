@@ -17,8 +17,10 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "better-auth": "^1.4.3",
     "drizzle-orm": "^0.44.7",
     "hono": "^4.10.7",
-    "nanoid": "^5.1.6"
+    "nanoid": "^5.1.6",
+    "resend": "^6.5.2"
   }
 }
