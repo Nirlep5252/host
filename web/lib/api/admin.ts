@@ -7,6 +7,10 @@ import type {
   AdminCreateUserResponse,
   AdminDeleteUserResponse,
   AdminRegenerateKeyResponse,
+  AdminWaitlistResponse,
+  AdminApproveWaitlistResponse,
+  AdminRejectWaitlistResponse,
+  AdminDeleteWaitlistResponse,
 } from "./types";
 
 type RequestOptions = {
@@ -42,6 +46,7 @@ export async function adminClient<T>(
 export const adminKeys = {
   all: ["admin"] as const,
   users: () => [...adminKeys.all, "users"] as const,
+  waitlist: () => [...adminKeys.all, "waitlist"] as const,
 };
 
 export function adminUsersQuery(adminKey: string) {
@@ -100,6 +105,72 @@ export function useAdminRegenerateKey(adminKey: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+    },
+  });
+}
+
+export function adminWaitlistQuery(adminKey: string, status?: string) {
+  return queryOptions({
+    queryKey: [...adminKeys.waitlist(), status],
+    queryFn: async () => {
+      const endpoint = status
+        ? `/admin/waitlist?status=${status}`
+        : "/admin/waitlist";
+      return adminClient<AdminWaitlistResponse>(endpoint, adminKey);
+    },
+    enabled: !!adminKey,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useAdminApproveWaitlist(adminKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entryId: string) => {
+      return adminClient<AdminApproveWaitlistResponse>(
+        `/admin/waitlist/${entryId}/approve`,
+        adminKey,
+        { method: "POST" }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.waitlist() });
+      queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+    },
+  });
+}
+
+export function useAdminRejectWaitlist(adminKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entryId: string) => {
+      return adminClient<AdminRejectWaitlistResponse>(
+        `/admin/waitlist/${entryId}/reject`,
+        adminKey,
+        { method: "POST" }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.waitlist() });
+    },
+  });
+}
+
+export function useAdminDeleteWaitlist(adminKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entryId: string) => {
+      return adminClient<AdminDeleteWaitlistResponse>(
+        `/admin/waitlist/${entryId}`,
+        adminKey,
+        { method: "DELETE" }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.waitlist() });
     },
   });
 }

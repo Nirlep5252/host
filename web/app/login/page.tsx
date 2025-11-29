@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Input } from "@/components/ui";
 import * as motion from "motion/react-client";
@@ -89,7 +90,9 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-text-muted">
           Don&apos;t have an API key?{" "}
-          <span className="text-text-secondary">Contact the admin.</span>
+          <Link href="/waitlist" className="text-accent hover:underline">
+            Join the waitlist
+          </Link>
         </p>
       </motion.div>
     </div>

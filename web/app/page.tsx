@@ -14,10 +14,15 @@ export default function Home() {
       <p className="mt-6 text-lg text-text-secondary">
         Yet another image hosting platform.
       </p>
-      <div className="mt-8">
+      <div className="mt-8 flex items-center gap-4">
         <Link href="/dashboard">
           <Button variant="primary" size="lg">
             Dashboard
+          </Button>
+        </Link>
+        <Link href="/waitlist">
+          <Button variant="secondary" size="lg">
+            Join Waitlist
           </Button>
         </Link>
       </div>

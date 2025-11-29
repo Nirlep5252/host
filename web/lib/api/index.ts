@@ -12,6 +12,12 @@ export type {
   AdminCreateUserResponse,
   AdminDeleteUserResponse,
   AdminRegenerateKeyResponse,
+  WaitlistEntry,
+  WaitlistStats,
+  AdminWaitlistResponse,
+  AdminApproveWaitlistResponse,
+  AdminRejectWaitlistResponse,
+  AdminDeleteWaitlistResponse,
 } from "./types";
 export { userKeys, imageKeys, userQuery, imagesQuery } from "./queries";
 export { useUploadImage, useUpdateImage, useDeleteImage } from "./mutations";
@@ -22,4 +28,8 @@ export {
   useAdminCreateUser,
   useAdminDeleteUser,
   useAdminRegenerateKey,
+  adminWaitlistQuery,
+  useAdminApproveWaitlist,
+  useAdminRejectWaitlist,
+  useAdminDeleteWaitlist,
 } from "./admin";

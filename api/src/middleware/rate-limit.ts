@@ -104,3 +104,4 @@ export function createRateLimiter(
 export const uploadRateLimit = createRateLimiter(30, 60000, "apiKey");
 export const adminRateLimit = createRateLimiter(10, 60000, "adminKey");
 export const publicImageRateLimit = createRateLimiter(100, 60000, "ip");
+export const waitlistRateLimit = createRateLimiter(10, 3600000, "ip"); // 10 per hour

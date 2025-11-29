@@ -5,6 +5,7 @@ import upload from "./routes/upload";
 import imagesRoute from "./routes/images";
 import admin from "./routes/admin";
 import me from "./routes/me";
+import waitlistRoute from "./routes/waitlist";
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -29,5 +30,6 @@ app.route("/i", imagesRoute);
 app.route("/images", imagesRoute);
 app.route("/admin", admin);
 app.route("/me", me);
+app.route("/waitlist", waitlistRoute);
 
 export default app;

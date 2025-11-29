@@ -76,3 +76,42 @@ export interface DeleteImageResponse {
   success: boolean;
   id: string;
 }
+
+export interface WaitlistEntry {
+  id: string;
+  email: string;
+  name: string | null;
+  reason: string | null;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  processedAt: string | null;
+}
+
+export interface WaitlistStats {
+  pending: number;
+  approved: number;
+  rejected: number;
+}
+
+export interface AdminWaitlistResponse {
+  entries: WaitlistEntry[];
+  stats: WaitlistStats;
+}
+
+export interface AdminApproveWaitlistResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    createdAt: string;
+  };
+  apiKey: string;
+}
+
+export interface AdminRejectWaitlistResponse {
+  success: boolean;
+}
+
+export interface AdminDeleteWaitlistResponse {
+  success: boolean;
+}
