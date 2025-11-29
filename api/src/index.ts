@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { Bindings, Variables } from "./types";
 import upload from "./routes/upload";
 import imagesRoute from "./routes/images";
@@ -6,6 +7,18 @@ import admin from "./routes/admin";
 import me from "./routes/me";
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+app.use(
+  "*",
+  cors({
+    origin: ["http://localhost:3000", "https://host.formality.life"],
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "X-API-Key"],
+    exposeHeaders: ["Content-Length"],
+    maxAge: 86400,
+    credentials: true,
+  })
+);
 
 app.get("/", (c) => {
   return c.json({ status: "ok", message: "Image upload API" });
