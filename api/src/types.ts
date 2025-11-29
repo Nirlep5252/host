@@ -7,6 +7,7 @@ export type Bindings = {
   ADMIN_KEY: string;
   ADMIN_EMAIL: string;
   BASE_URL: string;
+  TOKEN_SECRET: string;
 };
 
 export type Variables = {

@@ -4,6 +4,7 @@ import { getFile, deleteFile } from "../storage";
 import { createDb, images } from "../db";
 import { authMiddleware, verifyApiKey } from "../middleware/auth";
 import { publicImageRateLimit } from "../middleware/rate-limit";
+import { generateImageToken, verifyImageToken } from "../lib/tokens";
 import type { Bindings, Variables } from "../types";
 
 const imagesRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -27,16 +28,31 @@ imagesRoute.get("/list", authMiddleware, async (c) => {
 
     const baseUrl = c.env.BASE_URL || "http://localhost:3000";
 
+    const imagesWithUrls = await Promise.all(
+      userImages.map(async (img) => {
+        let url = `${baseUrl}/i/${img.id}`;
+        if (img.isPrivate) {
+          const token = await generateImageToken(
+            img.id,
+            user.id,
+            c.env.TOKEN_SECRET
+          );
+          url = `${url}?token=${token}`;
+        }
+        return {
+          id: img.id,
+          url,
+          originalName: img.originalName,
+          contentType: img.contentType,
+          sizeBytes: img.sizeBytes,
+          isPrivate: img.isPrivate,
+          createdAt: img.createdAt,
+        };
+      })
+    );
+
     return c.json({
-      images: userImages.map((img) => ({
-        id: img.id,
-        url: `${baseUrl}/i/${img.id}`,
-        originalName: img.originalName,
-        contentType: img.contentType,
-        sizeBytes: img.sizeBytes,
-        isPrivate: img.isPrivate,
-        createdAt: img.createdAt,
-      })),
+      images: imagesWithUrls,
       limit,
       offset,
     });
@@ -62,13 +78,29 @@ imagesRoute.get("/:id", publicImageRateLimit, async (c) => {
     }
 
     if (image.isPrivate) {
+      let authorized = false;
+
+      // Try API key header first
       const apiKey = c.req.header("X-API-Key");
-      if (!apiKey) {
-        return c.json({ error: "This image is private" }, 403);
+      if (apiKey) {
+        const user = await verifyApiKey(db, apiKey);
+        if (user && user.id === image.userId) {
+          authorized = true;
+        }
       }
 
-      const user = await verifyApiKey(db, apiKey);
-      if (!user || user.id !== image.userId) {
+      // Try token query parameter
+      if (!authorized) {
+        const token = c.req.query("token");
+        if (token) {
+          const result = await verifyImageToken(token, id, c.env.TOKEN_SECRET);
+          if (result && result.userId === image.userId) {
+            authorized = true;
+          }
+        }
+      }
+
+      if (!authorized) {
         return c.json({ error: "This image is private" }, 403);
       }
     }
