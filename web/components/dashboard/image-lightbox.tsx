@@ -1,10 +1,23 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 import type { Image } from "@/lib/api";
 import { Button } from "@/components/ui";
+
+const DEFAULT_DOMAIN = "formality.life";
+
+function buildFallbackUrl(domain: string, imageId: string, originalUrl: string): string {
+  if (domain === DEFAULT_DOMAIN) return originalUrl;
+  const url = new URL(originalUrl);
+  const token = url.searchParams.get("token");
+  let fallbackUrl = `https://${DEFAULT_DOMAIN}/i/${imageId}`;
+  if (token) {
+    fallbackUrl = `${fallbackUrl}?token=${token}`;
+  }
+  return fallbackUrl;
+}
 
 interface ImageLightboxProps {
   images: Image[];
@@ -15,6 +28,7 @@ interface ImageLightboxProps {
   onToggleVisibility: (id: string) => void;
   onDelete: (id: string) => void;
   isUpdating: boolean;
+  getImageUrl: (image: Image) => string;
 }
 
 function formatBytes(bytes: number | null): string {
@@ -34,9 +48,28 @@ export function ImageLightbox({
   onToggleVisibility,
   onDelete,
   isUpdating,
+  getImageUrl,
 }: ImageLightboxProps) {
   const image = images[currentIndex];
   const total = images.length;
+  const [localFallbackImages, setLocalFallbackImages] = useState<Set<string>>(new Set());
+
+  const getImageSrc = useCallback((img: Image) => {
+    const parentUrl = getImageUrl(img);
+    if (parentUrl !== img.url) {
+      return parentUrl;
+    }
+    if (localFallbackImages.has(img.id)) {
+      return buildFallbackUrl(img.domain, img.id, img.url);
+    }
+    return img.url;
+  }, [localFallbackImages, getImageUrl]);
+
+  const handleImageError = useCallback((imageId: string, domain: string) => {
+    if (domain !== DEFAULT_DOMAIN && !localFallbackImages.has(imageId)) {
+      setLocalFallbackImages(prev => new Set(prev).add(imageId));
+    }
+  }, [localFallbackImages]);
 
   const goNext = useCallback(() => {
     onNavigate((currentIndex + 1) % total);
@@ -48,13 +81,13 @@ export function ImageLightbox({
 
   const handleDownload = useCallback(() => {
     const a = document.createElement("a");
-    a.href = image.url;
+    a.href = getImageSrc(image);
     a.download = image.originalName || image.id;
     a.target = "_blank";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [image]);
+  }, [image, getImageSrc]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -140,8 +173,8 @@ export function ImageLightbox({
         {/* Image with crossfade */}
         <AnimatePresence mode="wait">
           <motion.img
-            key={image.id}
-            src={image.url}
+            key={`${image.id}-${localFallbackImages.has(image.id)}-${getImageUrl(image)}`}
+            src={getImageSrc(image)}
             alt={image.originalName || image.id}
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -149,6 +182,7 @@ export function ImageLightbox({
             transition={{ duration: 0.2 }}
             className="max-h-[75vh] max-w-[85vw] rounded-[--radius-lg] object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            onError={() => handleImageError(image.id, image.domain)}
           />
         </AnimatePresence>
       </div>

@@ -14,3 +14,4 @@ export {
 } from "./card";
 export { ImageCard, type ImageCardProps } from "./image-card";
 export { ToastProvider, useToast } from "./toast";
+export { FallbackImage } from "./fallback-image";

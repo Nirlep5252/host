@@ -54,6 +54,7 @@ export interface Image {
   sizeBytes: number | null;
   isPrivate: boolean;
   createdAt: string;
+  domain: string;
 }
 
 export interface ImagesListResponse {

@@ -3,11 +3,25 @@
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@tanstack/react-query";
 import { imagesQuery, useUpdateImage, useDeleteImage } from "@/lib/api";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 import type { Image } from "@/lib/api";
 import { ImageLightbox } from "./image-lightbox";
+import { FallbackImage } from "@/components/ui";
+
+const DEFAULT_DOMAIN = "formality.life";
+
+function buildFallbackUrl(domain: string, imageId: string, originalUrl: string): string {
+  if (domain === DEFAULT_DOMAIN) return originalUrl;
+  const url = new URL(originalUrl);
+  const token = url.searchParams.get("token");
+  let fallbackUrl = `https://${DEFAULT_DOMAIN}/i/${imageId}`;
+  if (token) {
+    fallbackUrl = `${fallbackUrl}?token=${token}`;
+  }
+  return fallbackUrl;
+}
 
 function formatBytes(bytes: number | null): string {
   if (!bytes) return "0 B";
@@ -61,6 +75,7 @@ function ImageCard({
   onCopy,
   onToggleVisibility,
   onDelete,
+  onFallback,
   deleteConfirm,
   isUpdating,
 }: {
@@ -69,6 +84,7 @@ function ImageCard({
   onCopy: (e: React.MouseEvent) => void;
   onToggleVisibility: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
+  onFallback: (imageId: string) => void;
   deleteConfirm: boolean;
   isUpdating: boolean;
 }) {
@@ -83,8 +99,12 @@ function ImageCard({
     >
       <div className="relative aspect-[4/3] overflow-hidden rounded-[--radius-lg] bg-bg-tertiary border border-border-default transition-all duration-300 group-hover:border-border-subtle group-hover:shadow-xl group-hover:shadow-black/40">
         {/* Image */}
-        <img
+        <FallbackImage
           src={image.url}
+          domain={image.domain}
+          imageId={image.id}
+          isPrivate={image.isPrivate}
+          onFallback={onFallback}
           alt={image.originalName || image.id}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           loading="lazy"
@@ -183,12 +203,24 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
   const { apiKey } = useAuth();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [fallbackImages, setFallbackImages] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = useQuery(imagesQuery(apiKey || ""));
   const updateMutation = useUpdateImage(apiKey || "");
   const deleteMutation = useDeleteImage(apiKey || "");
 
   const allImages = data?.images || [];
+
+  const getImageUrl = useCallback((img: Image) => {
+    if (fallbackImages.has(img.id)) {
+      return buildFallbackUrl(img.domain, img.id, img.url);
+    }
+    return img.url;
+  }, [fallbackImages]);
+
+  const handleImageFallback = useCallback((imageId: string) => {
+    setFallbackImages(prev => new Set(prev).add(imageId));
+  }, []);
 
   const openLightbox = (imageId: string) => {
     const index = allImages.findIndex((img) => img.id === imageId);
@@ -204,8 +236,9 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
   const handleCopy = async (id: string) => {
     const image = allImages.find((img) => img.id === id);
     if (image) {
-      await navigator.clipboard.writeText(image.url);
-      onCopySuccess?.(image.url);
+      const url = getImageUrl(image);
+      await navigator.clipboard.writeText(url);
+      onCopySuccess?.(url);
     }
   };
 
@@ -320,6 +353,7 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
                     e.stopPropagation();
                     handleDelete(image.id);
                   }}
+                  onFallback={handleImageFallback}
                   deleteConfirm={deleteConfirm === image.id}
                   isUpdating={updateMutation.isPending}
                 />
@@ -341,6 +375,7 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
             onToggleVisibility={handleToggleVisibility}
             onDelete={handleDelete}
             isUpdating={updateMutation.isPending}
+            getImageUrl={getImageUrl}
           />
         )}
       </AnimatePresence>
