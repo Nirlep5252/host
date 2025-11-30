@@ -73,7 +73,7 @@ admin.get("/users", async (c) => {
         name: users.name,
         isActive: users.isActive,
         createdAt: users.createdAt,
-        imageCount: sql<number>`COUNT(CASE WHEN ${images.deletedAt} IS NULL THEN 1 END)::int`,
+        imageCount: sql<number>`COUNT(CASE WHEN ${images.id} IS NOT NULL AND ${images.deletedAt} IS NULL THEN 1 END)::int`,
         storageBytes: sql<number>`COALESCE(SUM(CASE WHEN ${images.deletedAt} IS NULL THEN ${images.sizeBytes} END), 0)::bigint`,
       })
       .from(users)
