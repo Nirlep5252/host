@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -16,6 +17,9 @@ export const domains = pgTable("domains", {
   isActive: boolean("is_active").default(true).notNull(),
   isWorkerDomain: boolean("is_worker_domain").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  ownerId: uuid("owner_id"),
+  visibility: varchar("visibility", { length: 10 }).default("private").notNull(),
+  isApproved: boolean("is_approved").default(false).notNull(),
 });
 
 export const users = pgTable("users", {
@@ -94,6 +98,21 @@ export const waitlist = pgTable("waitlist", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   processedAt: timestamp("processed_at"),
 });
+
+export const domainsRelations = relations(domains, ({ one }) => ({
+  owner: one(users, {
+    fields: [domains.ownerId],
+    references: [users.id],
+  }),
+}));
+
+export const usersRelations = relations(users, ({ many, one }) => ({
+  ownedDomains: many(domains),
+  selectedDomain: one(domains, {
+    fields: [users.domainId],
+    references: [domains.id],
+  }),
+}));
 
 export type Domain = typeof domains.$inferSelect;
 export type NewDomain = typeof domains.$inferInsert;

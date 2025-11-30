@@ -13,6 +13,7 @@ export type Bindings = {
   DNS_TARGET?: string;
   CLOUDFLARE_ZONE_ID: string;
   CLOUDFLARE_API_TOKEN: string;
+  CLOUDFLARE_WORKER_NAME?: string;
 };
 
 export type Variables = {

@@ -29,6 +29,20 @@
       "when": 1764487374016,
       "tag": "0003_add-is-worker-domain",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1733000000000,
+      "tag": "0004_add-user-domains",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1764516622698,
+      "tag": "0005_slippery_runaways",
+      "breakpoints": true
     }
   ]
 }

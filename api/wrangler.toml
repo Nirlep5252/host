@@ -9,6 +9,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 BASE_URL = "https://formality.life"
+CLOUDFLARE_WORKER_NAME = "sharex-image-host"
 
 # Set secrets via:
 #   wrangler secret put DATABASE_URL

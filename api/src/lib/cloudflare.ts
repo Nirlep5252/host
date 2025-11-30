@@ -32,14 +32,22 @@ interface CloudflareResponse<T> {
   result: T;
 }
 
+interface WorkerRouteResult {
+  id: string;
+  pattern: string;
+  script: string;
+}
+
 export class CloudflareAPI {
   private zoneId: string;
   private apiToken: string;
+  private workerScriptName: string;
   private baseUrl = "https://api.cloudflare.com/client/v4";
 
-  constructor(zoneId: string, apiToken: string) {
+  constructor(zoneId: string, apiToken: string, workerScriptName: string = "sharex-image-host") {
     this.zoneId = zoneId;
     this.apiToken = apiToken;
+    this.workerScriptName = workerScriptName;
   }
 
   private async request<T>(
@@ -195,6 +203,90 @@ export class CloudflareAPI {
       isConfigured,
       status: result.hostname.status,
       sslStatus: result.hostname.ssl.status,
+    };
+  }
+
+  async createWorkerRoute(hostname: string): Promise<{
+    success: boolean;
+    routeId?: string;
+    error?: string;
+  }> {
+    const pattern = `${hostname}/*`;
+
+    const response = await this.request<WorkerRouteResult>(
+      `/zones/${this.zoneId}/workers/routes`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          pattern,
+          script: this.workerScriptName,
+        }),
+      }
+    );
+
+    if (!response.success) {
+      return {
+        success: false,
+        error: response.errors[0]?.message || "Failed to create worker route",
+      };
+    }
+
+    return {
+      success: true,
+      routeId: response.result.id,
+    };
+  }
+
+  async deleteWorkerRoute(routeId: string): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    const response = await this.request<{ id: string }>(
+      `/zones/${this.zoneId}/workers/routes/${routeId}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+    if (!response.success) {
+      return {
+        success: false,
+        error: response.errors[0]?.message || "Failed to delete worker route",
+      };
+    }
+
+    return { success: true };
+  }
+
+  async getWorkerRouteByPattern(hostname: string): Promise<{
+    success: boolean;
+    routeId?: string;
+    error?: string;
+  }> {
+    const pattern = `${hostname}/*`;
+
+    const response = await this.request<WorkerRouteResult[]>(
+      `/zones/${this.zoneId}/workers/routes`
+    );
+
+    if (!response.success) {
+      return {
+        success: false,
+        error: response.errors[0]?.message || "Failed to get worker routes",
+      };
+    }
+
+    const route = response.result.find((r) => r.pattern === pattern);
+    if (!route) {
+      return {
+        success: false,
+        error: "Worker route not found",
+      };
+    }
+
+    return {
+      success: true,
+      routeId: route.id,
     };
   }
 }

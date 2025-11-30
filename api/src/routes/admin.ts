@@ -377,7 +377,23 @@ admin.get("/domains", async (c) => {
     const db = createDb(c.env.DATABASE_URL);
     const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN);
 
-    const allDomains = await db.select().from(domains).orderBy(desc(domains.createdAt));
+    const allDomains = await db
+      .select({
+        id: domains.id,
+        domain: domains.domain,
+        cloudflareHostnameId: domains.cloudflareHostnameId,
+        isDefault: domains.isDefault,
+        isActive: domains.isActive,
+        isWorkerDomain: domains.isWorkerDomain,
+        createdAt: domains.createdAt,
+        ownerId: domains.ownerId,
+        visibility: domains.visibility,
+        isApproved: domains.isApproved,
+        ownerEmail: users.email,
+      })
+      .from(domains)
+      .leftJoin(users, eq(domains.ownerId, users.id))
+      .orderBy(desc(domains.createdAt));
 
     const domainsWithStatus = await Promise.all(
       allDomains.map(async (domain) => {
@@ -466,7 +482,7 @@ admin.patch("/domains/:id", async (c) => {
 
   try {
     const db = createDb(c.env.DATABASE_URL);
-    const body = await c.req.json<{ isActive?: boolean; isDefault?: boolean }>();
+    const body = await c.req.json<{ isActive?: boolean; isDefault?: boolean; isApproved?: boolean }>();
 
     const [domain] = await db.select().from(domains).where(eq(domains.id, id));
 
@@ -483,6 +499,7 @@ admin.patch("/domains/:id", async (c) => {
       .set({
         ...(body.isActive !== undefined && { isActive: body.isActive }),
         ...(body.isDefault !== undefined && { isDefault: body.isDefault }),
+        ...(body.isApproved !== undefined && { isApproved: body.isApproved }),
       })
       .where(eq(domains.id, id))
       .returning();

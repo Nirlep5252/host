@@ -17,6 +17,10 @@ interface DomainStatus {
   status: string;
   sslStatus: string;
   createdAt: string;
+  ownerId: string | null;
+  ownerEmail: string | null;
+  visibility: string;
+  isApproved: boolean;
 }
 
 function getStatusInfo(domain: DomainStatus): {
@@ -121,6 +125,20 @@ export default function DomainsPage() {
     }
   };
 
+  const handleApprove = async (domainId: string, approve: boolean) => {
+    if (!adminKey) return;
+    try {
+      await adminClient(`/admin/domains/${domainId}`, adminKey, {
+        method: "PATCH",
+        body: JSON.stringify({ isApproved: approve }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin", "domains"] });
+      toast(approve ? "Domain approved" : "Domain approval revoked");
+    } catch {
+      toast("Failed to update domain approval");
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-4rem)]">
       <div className="mb-6 flex items-end justify-between">
@@ -212,13 +230,16 @@ export default function DomainsPage() {
             <div className="space-y-3">
               {domainsData?.domains?.map((domain) => {
                 const statusInfo = getStatusInfo(domain as DomainStatus);
+                const typedDomain = domain as DomainStatus;
+                const isUserDomain = typedDomain.ownerId !== null;
+                const needsApproval = isUserDomain && typedDomain.visibility === "public" && !typedDomain.isApproved;
                 return (
                   <Card key={domain.id} className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`h-2.5 w-2.5 rounded-full ${statusInfo.color}`} />
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-text-primary">{domain.domain}</span>
                             {domain.isDefault && (
                               <Badge variant="accent">Default</Badge>
@@ -229,8 +250,21 @@ export default function DomainsPage() {
                             <Badge variant={statusInfo.color === "bg-success" ? "success" : statusInfo.color === "bg-accent" ? "accent" : "warning"}>
                               {statusInfo.label}
                             </Badge>
+                            {isUserDomain && (
+                              <Badge variant={typedDomain.visibility === "private" ? "default" : "accent"}>
+                                {typedDomain.visibility === "private" ? "Private" : "Public"}
+                              </Badge>
+                            )}
+                            {needsApproval && (
+                              <Badge variant="warning">Pending Approval</Badge>
+                            )}
                           </div>
                           <p className="text-xs text-text-muted mt-0.5">
+                            {isUserDomain ? (
+                              <>Owner: <span className="text-text-secondary">{typedDomain.ownerEmail}</span> &middot; </>
+                            ) : (
+                              <>Owner: <span className="text-accent">Admin</span> &middot; </>
+                            )}
                             {statusInfo.description}
                           </p>
                         </div>
@@ -246,6 +280,24 @@ export default function DomainsPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
                         </Button>
+                        {needsApproval && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleApprove(domain.id, true)}
+                          >
+                            Approve
+                          </Button>
+                        )}
+                        {isUserDomain && typedDomain.visibility === "public" && typedDomain.isApproved && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleApprove(domain.id, false)}
+                          >
+                            Revoke
+                          </Button>
+                        )}
                         {!domain.isDefault && (
                           <Button
                             variant="ghost"
