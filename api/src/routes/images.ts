@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { getFile, deleteFile } from "../storage";
-import { createDb, images } from "../db";
+import { createDb, images, domains } from "../db";
 import { authMiddleware, verifyApiKey } from "../middleware/auth";
 import { publicImageRateLimit } from "../middleware/rate-limit";
 import { generateImageToken, verifyImageToken } from "../lib/tokens";
@@ -77,6 +77,22 @@ imagesRoute.get("/:id", publicImageRateLimit, async (c) => {
 
     if (!image) {
       return c.json({ error: "Not found" }, 404);
+    }
+
+    // Get the request hostname and validate domain access
+    const requestHost = c.req.header("host")?.split(":")[0] || "";
+    const [defaultDomain] = await db
+      .select({ domain: domains.domain })
+      .from(domains)
+      .where(eq(domains.isDefault, true));
+    const defaultDomainName = defaultDomain?.domain || "formality.life";
+
+    // Non-default domains can only serve images uploaded with that specific domain
+    if (requestHost !== defaultDomainName) {
+      const imageDomain = image.domain || defaultDomainName;
+      if (imageDomain !== requestHost) {
+        return c.json({ error: "Not found" }, 404);
+      }
     }
 
     if (image.isPrivate) {
