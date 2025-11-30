@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq, sql, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { Resend } from "resend";
-import { createDb, users, waitlist, domains } from "../db";
+import { createDb, users, waitlist, domains, images } from "../db";
 import { adminMiddleware, hashApiKey } from "../middleware/auth";
 import { adminRateLimit } from "../middleware/rate-limit";
 import { CloudflareAPI } from "../lib/cloudflare";
@@ -66,13 +66,19 @@ admin.get("/users", async (c) => {
   try {
     const db = createDb(c.env.DATABASE_URL);
 
-    const allUsers = await db.select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      isActive: users.isActive,
-      createdAt: users.createdAt,
-    }).from(users);
+    const allUsers = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        imageCount: sql<number>`COUNT(CASE WHEN ${images.deletedAt} IS NULL THEN 1 END)::int`,
+        storageBytes: sql<number>`COALESCE(SUM(CASE WHEN ${images.deletedAt} IS NULL THEN ${images.sizeBytes} END), 0)::bigint`,
+      })
+      .from(users)
+      .leftJoin(images, eq(users.id, images.userId))
+      .groupBy(users.id);
 
     return c.json({ users: allUsers });
   } catch (error) {

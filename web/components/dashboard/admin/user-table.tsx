@@ -46,6 +46,14 @@ function getAvatarColor(email: string): string {
   return colors[index % colors.length];
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
 export function UserTable({ users, onCopyKey }: UserTableProps) {
   const { adminKey } = useAuth();
   const deleteMutation = useAdminDeleteUser(adminKey || "");
@@ -142,6 +150,9 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
                 {user.name || user.email.split("@")[0]}
               </p>
               <p className="mt-0.5 truncate text-sm text-text-muted">{user.email}</p>
+              <p className="mt-1.5 text-xs text-text-secondary">
+                {user.imageCount} {user.imageCount === 1 ? "image" : "images"} · {formatBytes(user.storageBytes)}
+              </p>
             </div>
 
             {/* Footer: Date + Actions */}

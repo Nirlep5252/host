@@ -14,6 +14,8 @@ export interface AdminUser {
   name: string | null;
   isActive: boolean;
   createdAt: string;
+  imageCount: number;
+  storageBytes: number;
 }
 
 export interface AdminUsersResponse {
