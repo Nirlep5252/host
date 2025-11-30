@@ -43,19 +43,32 @@ export function createAuth(db: Database, env: Bindings) {
             to: email,
             subject: "Sign in to formality.life",
             html: `
-              <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-                <h1 style="font-size: 24px; font-weight: 600; margin-bottom: 24px; color: #fafafa;">
-                  Sign in to <span style="color: #D946EF;">formality.life</span>
-                </h1>
-                <p style="color: #a1a1aa; margin-bottom: 24px;">
-                  Click the button below to sign in to your account. This link will expire in 10 minutes.
-                </p>
-                <a href="${url}" style="display: inline-block; background: #D946EF; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500;">
-                  Sign in
-                </a>
-                <p style="color: #71717a; font-size: 14px; margin-top: 24px;">
-                  If you didn't request this email, you can safely ignore it.
-                </p>
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #000000; padding: 40px 20px;">
+                <div style="max-width: 480px; margin: 0 auto;">
+                  <div style="text-align: center; margin-bottom: 32px;">
+                    <h1 style="font-size: 28px; font-weight: 600; color: #fafafa; margin: 0;">
+                      Sign in to <span style="color: #D946EF;">formality.life</span>
+                    </h1>
+                  </div>
+
+                  <div style="background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 12px; padding: 32px;">
+                    <p style="color: #a1a1aa; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+                      Click the button below to sign in to your account. This link will expire in 10 minutes.
+                    </p>
+
+                    <div style="text-align: center;">
+                      <a href="${url}" style="display: inline-block; background: #D946EF; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+                        Sign In
+                      </a>
+                    </div>
+                  </div>
+
+                  <div style="text-align: center; margin-top: 32px;">
+                    <p style="color: #525252; font-size: 13px; margin: 0;">
+                      If you didn't request this email, you can safely ignore it.
+                    </p>
+                  </div>
+                </div>
               </div>
             `,
           });

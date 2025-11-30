@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { eq, sql, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { Resend } from "resend";
 import { createDb, users, waitlist, domains } from "../db";
 import { adminMiddleware, hashApiKey } from "../middleware/auth";
 import { adminRateLimit } from "../middleware/rate-limit";
@@ -229,6 +230,62 @@ admin.post("/waitlist/:id/approve", async (c) => {
       .returning();
 
     const newUser = result[0];
+
+    try {
+      const resend = new Resend(c.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: "formality.life <noreply@formality.life>",
+        to: entry.email,
+        subject: "Welcome to formality.life - You're In!",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #000000; padding: 40px 20px;">
+            <div style="max-width: 480px; margin: 0 auto;">
+              <div style="text-align: center; margin-bottom: 32px;">
+                <h1 style="font-size: 28px; font-weight: 600; color: #fafafa; margin: 0;">
+                  Welcome to <span style="color: #D946EF;">formality.life</span>
+                </h1>
+              </div>
+
+              <div style="background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 12px; padding: 32px;">
+                <p style="color: #a1a1aa; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+                  Your application has been approved! You now have access to formality.life's image hosting platform.
+                </p>
+
+                <p style="color: #fafafa; font-size: 14px; font-weight: 500; margin: 0 0 12px 0;">
+                  Your API Key
+                </p>
+
+                <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                  <code style="color: #D946EF; font-family: 'SF Mono', Monaco, 'Courier New', monospace; font-size: 14px; word-break: break-all; letter-spacing: 0.5px;">
+                    ${apiKey}
+                  </code>
+                </div>
+
+                <div style="background: rgba(217, 70, 239, 0.08); border-left: 3px solid #D946EF; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
+                  <p style="color: #a1a1aa; font-size: 13px; margin: 0; line-height: 1.5;">
+                    <strong style="color: #fafafa;">Important:</strong> Save this key securely. It won't be shown again and is required to upload images.
+                  </p>
+                </div>
+
+                <div style="text-align: center;">
+                  <a href="https://formality.life/" style="display: inline-block; background: #D946EF; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+                    Get Started
+                  </a>
+                </div>
+              </div>
+
+              <div style="text-align: center; margin-top: 32px;">
+                <p style="color: #525252; font-size: 13px; margin: 0;">
+                  Need help getting started? Check out our <a href="https://formality.life/docs" style="color: #D946EF; text-decoration: none;">documentation</a>.
+                </p>
+              </div>
+            </div>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Failed to send welcome email:", emailError);
+    }
 
     await db
       .update(waitlist)
