@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
+# rudra.gay custom domain should be configured via Cloudflare Dashboard:
+# Workers & Pages → sharex-image-host → Settings → Triggers → Custom Domains
+# Add "rudra.gay" and enable "Override existing DNS record"
+
 [vars]
 BASE_URL = "https://formality.life"
 

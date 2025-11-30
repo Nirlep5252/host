@@ -14,6 +14,7 @@ export const domains = pgTable("domains", {
   cloudflareHostnameId: varchar("cloudflare_hostname_id", { length: 64 }),
   isDefault: boolean("is_default").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
+  isWorkerDomain: boolean("is_worker_domain").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

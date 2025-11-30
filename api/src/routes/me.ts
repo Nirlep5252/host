@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import { createDb, images, users, domains, type User } from "../db";
 import { verifyApiKey, hashApiKey } from "../middleware/auth";
 import { sessionMiddleware, requireSession } from "../middleware/session";
+import { CloudflareAPI } from "../lib/cloudflare";
 import type { Bindings, Variables } from "../types";
 
 const me = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -135,16 +136,45 @@ me.get("/domains", async (c) => {
   }
 
   try {
+    const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN);
+
     const activeDomains = await db
       .select({
         id: domains.id,
         domain: domains.domain,
         isDefault: domains.isDefault,
+        isWorkerDomain: domains.isWorkerDomain,
+        cloudflareHostnameId: domains.cloudflareHostnameId,
       })
       .from(domains)
       .where(eq(domains.isActive, true));
 
-    return c.json({ domains: activeDomains });
+    // Filter to only fully configured domains
+    const configuredDomains = await Promise.all(
+      activeDomains.map(async (domain) => {
+        // Default domains and worker domains don't need Cloudflare for SaaS verification
+        if (domain.isDefault || domain.isWorkerDomain) {
+          return { id: domain.id, domain: domain.domain, isDefault: domain.isDefault };
+        }
+
+        // Custom domains need to be fully active in Cloudflare
+        if (!domain.cloudflareHostnameId) {
+          return null;
+        }
+
+        const status = await cf.checkHostnameStatus(domain.domain);
+        if (status.isConfigured) {
+          return { id: domain.id, domain: domain.domain, isDefault: domain.isDefault };
+        }
+
+        return null;
+      })
+    );
+
+    // Filter out null values (unconfigured domains)
+    const availableDomains = configuredDomains.filter((d): d is NonNullable<typeof d> => d !== null);
+
+    return c.json({ domains: availableDomains });
   } catch (error) {
     console.error("Failed to fetch domains:", error);
     return c.json({ error: "Failed to fetch domains" }, 500);
@@ -159,6 +189,7 @@ me.patch("/domain", requireSession, async (c) => {
 
   try {
     const db = createDb(c.env.DATABASE_URL);
+    const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN);
     const body = await c.req.json<{ domainId: string | null }>();
 
     if (body.domainId !== null) {
@@ -169,6 +200,18 @@ me.patch("/domain", requireSession, async (c) => {
 
       if (!domain) {
         return c.json({ error: "Domain not found or inactive" }, 400);
+      }
+
+      // Verify domain is fully configured (default domains and worker domains skip this check)
+      if (!domain.isDefault && !domain.isWorkerDomain) {
+        if (!domain.cloudflareHostnameId) {
+          return c.json({ error: "Domain is not fully configured" }, 400);
+        }
+
+        const status = await cf.checkHostnameStatus(domain.domain);
+        if (!status.isConfigured) {
+          return c.json({ error: "Domain is not fully configured. Please wait for SSL certificate to be issued." }, 400);
+        }
       }
     }
 

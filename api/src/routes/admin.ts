@@ -328,7 +328,7 @@ admin.get("/domains", async (c) => {
 
     const domainsWithStatus = await Promise.all(
       allDomains.map(async (domain) => {
-        if (domain.isDefault) {
+        if (domain.isDefault || domain.isWorkerDomain) {
           return { ...domain, isConfigured: true, status: "active", sslStatus: "active" };
         }
 

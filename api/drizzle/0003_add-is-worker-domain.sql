@@ -1,0 +1,1 @@
+ALTER TABLE "domains" ADD COLUMN "is_worker_domain" boolean DEFAULT false NOT NULL;
