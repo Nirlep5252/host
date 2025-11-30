@@ -12,6 +12,7 @@ A self-hosted image hosting platform built for ShareX. Fast uploads, private ima
 - Supports PNG, JPG, GIF, WebP, and SVG (up to 10MB)
 - Short URLs for easy sharing (`/i/abc123`)
 - Private images with token-based access links
+- Custom domain support ;)
 
 ## Tech Stack
 
