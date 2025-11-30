@@ -1,24 +1,32 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Header } from "@/components/dashboard/header";
+import { ApiKeyRequiredModal } from "@/components/dashboard/api-key-required-modal";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, apiKey } = useAuth();
   const router = useRouter();
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push("/login");
     }
   }, [isLoading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && !apiKey) {
+      setShowApiKeyModal(true);
+    }
+  }, [isLoading, isAuthenticated, apiKey]);
 
   if (isLoading) {
     return (
@@ -42,6 +50,10 @@ export default function DashboardLayout({
         <Header />
         <main className="p-6">{children}</main>
       </div>
+      <ApiKeyRequiredModal
+        isOpen={showApiKeyModal}
+        onComplete={() => setShowApiKeyModal(false)}
+      />
     </div>
   );
 }

@@ -105,6 +105,8 @@ export function Sidebar() {
   const { isAdmin, logout, apiKey } = useAuth();
 
   const handleDownloadShareXConfig = () => {
+    if (!apiKey) return;
+
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
     const config = {
       Version: "16.0.0",
@@ -197,7 +199,13 @@ export function Sidebar() {
       <div className="border-t border-border-subtle p-3 space-y-1">
         <button
           onClick={handleDownloadShareXConfig}
-          className="group flex w-full items-center gap-3 rounded-[--radius-md] px-3 py-2.5 text-text-muted transition-all duration-200 hover:bg-accent-muted hover:text-accent"
+          disabled={!apiKey}
+          className={`group flex w-full items-center gap-3 rounded-[--radius-md] px-3 py-2.5 transition-all duration-200 ${
+            apiKey
+              ? "text-text-muted hover:bg-accent-muted hover:text-accent"
+              : "cursor-not-allowed text-text-muted/50"
+          }`}
+          title={!apiKey ? "Generate an API key first" : undefined}
         >
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

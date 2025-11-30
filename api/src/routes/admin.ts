@@ -257,25 +257,15 @@ admin.post("/waitlist/:id/approve", async (c) => {
                   Your application has been approved! You now have access to formality.life's image hosting platform.
                 </p>
 
-                <p style="color: #fafafa; font-size: 14px; font-weight: 500; margin: 0 0 12px 0;">
-                  Your API Key
-                </p>
-
-                <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                  <code style="color: #D946EF; font-family: 'SF Mono', Monaco, 'Courier New', monospace; font-size: 14px; word-break: break-all; letter-spacing: 0.5px;">
-                    ${apiKey}
-                  </code>
-                </div>
-
                 <div style="background: rgba(217, 70, 239, 0.08); border-left: 3px solid #D946EF; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
                   <p style="color: #a1a1aa; font-size: 13px; margin: 0; line-height: 1.5;">
-                    <strong style="color: #fafafa;">Important:</strong> Save this key securely. It won't be shown again and is required to upload images.
+                    <strong style="color: #fafafa;">First step:</strong> After signing in, create an API key from your dashboard settings to start uploading images.
                   </p>
                 </div>
 
                 <div style="text-align: center;">
                   <a href="https://formality.life/" style="display: inline-block; background: #D946EF; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
-                    Get Started
+                    Sign In
                   </a>
                 </div>
               </div>
