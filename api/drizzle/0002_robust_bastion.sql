@@ -1,0 +1,1 @@
+ALTER TABLE "domains" ADD COLUMN "cloudflare_hostname_id" varchar(64);

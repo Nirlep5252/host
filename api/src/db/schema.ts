@@ -8,6 +8,15 @@ import {
   text,
 } from "drizzle-orm/pg-core";
 
+export const domains = pgTable("domains", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  domain: varchar("domain", { length: 255 }).unique().notNull(),
+  cloudflareHostnameId: varchar("cloudflare_hostname_id", { length: 64 }),
+  isDefault: boolean("is_default").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).unique().notNull(),
@@ -18,6 +27,7 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").default(true).notNull(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: varchar("image", { length: 255 }),
+  domainId: uuid("domain_id").references(() => domains.id),
 });
 
 export const session = pgTable("session", {
@@ -71,6 +81,7 @@ export const images = pgTable("images", {
   isPrivate: boolean("is_private").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
+  domain: varchar("domain", { length: 255 }),
 });
 
 export const waitlist = pgTable("waitlist", {
@@ -83,6 +94,8 @@ export const waitlist = pgTable("waitlist", {
   processedAt: timestamp("processed_at"),
 });
 
+export type Domain = typeof domains.$inferSelect;
+export type NewDomain = typeof domains.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Image = typeof images.$inferSelect;

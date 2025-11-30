@@ -8,6 +8,20 @@
       "when": 1764428909407,
       "tag": "0000_clean_saracen",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1764482426138,
+      "tag": "0001_rapid_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1764483924135,
+      "tag": "0002_robust_bastion",
+      "breakpoints": true
     }
   ]
 }

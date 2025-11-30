@@ -23,6 +23,8 @@ export interface User {
   imageCount?: number;
   isAdmin?: boolean;
   hasApiKey?: boolean;
+  domain?: string | null;
+  domainId?: string | null;
 }
 
 interface AuthContextType {

@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { eq, sql, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { createDb, users, waitlist } from "../db";
+import { createDb, users, waitlist, domains } from "../db";
 import { adminMiddleware, hashApiKey } from "../middleware/auth";
 import { adminRateLimit } from "../middleware/rate-limit";
+import { CloudflareAPI } from "../lib/cloudflare";
 import type { Bindings } from "../types";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -315,6 +316,175 @@ admin.delete("/waitlist/:id", async (c) => {
   } catch (error) {
     console.error("Failed to delete waitlist entry:", error);
     return c.json({ error: "Failed to delete waitlist entry" }, 500);
+  }
+});
+
+admin.get("/domains", async (c) => {
+  try {
+    const db = createDb(c.env.DATABASE_URL);
+    const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN);
+
+    const allDomains = await db.select().from(domains).orderBy(desc(domains.createdAt));
+
+    const domainsWithStatus = await Promise.all(
+      allDomains.map(async (domain) => {
+        if (domain.isDefault) {
+          return { ...domain, isConfigured: true, status: "active", sslStatus: "active" };
+        }
+
+        if (!domain.cloudflareHostnameId) {
+          return { ...domain, isConfigured: false, status: "not_registered", sslStatus: "not_registered" };
+        }
+
+        const status = await cf.checkHostnameStatus(domain.domain);
+        return {
+          ...domain,
+          isConfigured: status.isConfigured,
+          status: status.status,
+          sslStatus: status.sslStatus,
+        };
+      })
+    );
+
+    return c.json({ domains: domainsWithStatus });
+  } catch (error) {
+    console.error("Failed to fetch domains:", error);
+    return c.json({ error: "Failed to fetch domains" }, 500);
+  }
+});
+
+admin.post("/domains", async (c) => {
+  try {
+    const db = createDb(c.env.DATABASE_URL);
+    const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN);
+    const body = await c.req.json<{ domain: string; isDefault?: boolean }>();
+
+    if (!body.domain) {
+      return c.json({ error: "Domain is required" }, 400);
+    }
+
+    const domainName = body.domain.toLowerCase().trim();
+
+    const [existing] = await db
+      .select()
+      .from(domains)
+      .where(eq(domains.domain, domainName));
+
+    if (existing) {
+      return c.json({ error: "Domain already exists" }, 400);
+    }
+
+    let cloudflareHostnameId: string | undefined;
+
+    if (!body.isDefault) {
+      const cfResult = await cf.createCustomHostname(domainName);
+      if (!cfResult.success) {
+        return c.json({ error: cfResult.error || "Failed to register domain with Cloudflare" }, 400);
+      }
+      cloudflareHostnameId = cfResult.hostnameId;
+    }
+
+    if (body.isDefault) {
+      await db.update(domains).set({ isDefault: false }).where(eq(domains.isDefault, true));
+    }
+
+    const result = await db
+      .insert(domains)
+      .values({
+        domain: domainName,
+        cloudflareHostnameId,
+        isDefault: body.isDefault ?? false,
+      })
+      .returning();
+
+    return c.json({ domain: result[0] });
+  } catch (error) {
+    console.error("Failed to create domain:", error);
+    return c.json({ error: "Failed to create domain" }, 500);
+  }
+});
+
+admin.patch("/domains/:id", async (c) => {
+  const id = c.req.param("id");
+
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: "Invalid ID format" }, 400);
+  }
+
+  try {
+    const db = createDb(c.env.DATABASE_URL);
+    const body = await c.req.json<{ isActive?: boolean; isDefault?: boolean }>();
+
+    const [domain] = await db.select().from(domains).where(eq(domains.id, id));
+
+    if (!domain) {
+      return c.json({ error: "Domain not found" }, 404);
+    }
+
+    if (body.isDefault === true) {
+      await db.update(domains).set({ isDefault: false }).where(eq(domains.isDefault, true));
+    }
+
+    const result = await db
+      .update(domains)
+      .set({
+        ...(body.isActive !== undefined && { isActive: body.isActive }),
+        ...(body.isDefault !== undefined && { isDefault: body.isDefault }),
+      })
+      .where(eq(domains.id, id))
+      .returning();
+
+    return c.json({ domain: result[0] });
+  } catch (error) {
+    console.error("Failed to update domain:", error);
+    return c.json({ error: "Failed to update domain" }, 500);
+  }
+});
+
+admin.delete("/domains/:id", async (c) => {
+  const id = c.req.param("id");
+
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: "Invalid ID format" }, 400);
+  }
+
+  try {
+    const db = createDb(c.env.DATABASE_URL);
+    const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN);
+
+    const [domain] = await db.select().from(domains).where(eq(domains.id, id));
+
+    if (!domain) {
+      return c.json({ error: "Domain not found" }, 404);
+    }
+
+    if (domain.isDefault) {
+      return c.json({ error: "Cannot delete default domain" }, 400);
+    }
+
+    const usersWithDomain = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.domainId, id))
+      .limit(1);
+
+    if (usersWithDomain.length > 0) {
+      return c.json({ error: "Cannot delete domain that is assigned to users" }, 400);
+    }
+
+    if (domain.cloudflareHostnameId) {
+      const cfResult = await cf.deleteCustomHostname(domain.cloudflareHostnameId);
+      if (!cfResult.success) {
+        console.error("Failed to delete Cloudflare hostname:", cfResult.error);
+      }
+    }
+
+    await db.delete(domains).where(eq(domains.id, id));
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete domain:", error);
+    return c.json({ error: "Failed to delete domain" }, 500);
   }
 });
 

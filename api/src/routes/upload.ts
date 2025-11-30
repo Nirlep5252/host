@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
+import { eq } from "drizzle-orm";
 import { uploadFile, deleteFile } from "../storage";
-import { createDb, images } from "../db";
+import { createDb, images, domains, users } from "../db";
 import { authMiddleware } from "../middleware/auth";
 import { uploadRateLimit } from "../middleware/rate-limit";
 import type { Bindings, Variables } from "../types";
@@ -99,8 +100,32 @@ upload.post("/", authMiddleware, async (c) => {
     const buffer = await file.arrayBuffer();
     await uploadFile(c.env.R2, key, buffer, file.type);
 
+    const db = createDb(c.env.DATABASE_URL);
+
+    let userDomain: string | null = null;
+    const [freshUser] = await db
+      .select({ domainId: users.domainId })
+      .from(users)
+      .where(eq(users.id, user.id));
+
+    if (freshUser?.domainId) {
+      const [domainRecord] = await db
+        .select({ domain: domains.domain })
+        .from(domains)
+        .where(eq(domains.id, freshUser.domainId));
+      userDomain = domainRecord?.domain ?? null;
+    }
+    if (!userDomain) {
+      const [defaultDomain] = await db
+        .select({ domain: domains.domain })
+        .from(domains)
+        .where(eq(domains.isDefault, true));
+      userDomain = defaultDomain?.domain ?? null;
+    }
+
+    const imageDomain = userDomain || c.env.BASE_URL?.replace(/^https?:\/\//, "") || "formality.life";
+
     try {
-      const db = createDb(c.env.DATABASE_URL);
       await db.insert(images).values({
         id: key,
         userId: user.id,
@@ -108,6 +133,7 @@ upload.post("/", authMiddleware, async (c) => {
         contentType: file.type,
         sizeBytes: buffer.byteLength,
         isPrivate: false,
+        domain: imageDomain,
       });
     } catch (dbError) {
       try {
@@ -116,8 +142,7 @@ upload.post("/", authMiddleware, async (c) => {
       throw dbError;
     }
 
-    const baseUrl = c.env.BASE_URL || "http://localhost:3000";
-    const url = `${baseUrl}/i/${key}`;
+    const url = `https://${imageDomain}/i/${key}`;
 
     return c.json({ url, id: key });
   } catch (error) {

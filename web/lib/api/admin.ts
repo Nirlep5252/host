@@ -47,6 +47,7 @@ export const adminKeys = {
   all: ["admin"] as const,
   users: () => [...adminKeys.all, "users"] as const,
   waitlist: () => [...adminKeys.all, "waitlist"] as const,
+  domains: () => [...adminKeys.all, "domains"] as const,
 };
 
 export function adminUsersQuery(adminKey: string) {
@@ -172,5 +173,31 @@ export function useAdminDeleteWaitlist(adminKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.waitlist() });
     },
+  });
+}
+
+interface AdminDomain {
+  id: string;
+  domain: string;
+  isDefault: boolean;
+  isActive: boolean;
+  isConfigured: boolean;
+  status: string;
+  sslStatus: string;
+  createdAt: string;
+}
+
+interface AdminDomainsResponse {
+  domains: AdminDomain[];
+}
+
+export function adminDomainsQuery(adminKey: string) {
+  return queryOptions({
+    queryKey: adminKeys.domains(),
+    queryFn: async () => {
+      return adminClient<AdminDomainsResponse>("/admin/domains", adminKey);
+    },
+    enabled: !!adminKey,
+    staleTime: 30 * 1000,
   });
 }

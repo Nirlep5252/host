@@ -26,11 +26,12 @@ imagesRoute.get("/list", authMiddleware, async (c) => {
       .limit(limit)
       .offset(offset);
 
-    const baseUrl = c.env.BASE_URL || "http://localhost:3000";
+    const fallbackDomain = c.env.BASE_URL?.replace(/^https?:\/\//, "") || "formality.life";
 
     const imagesWithUrls = await Promise.all(
       userImages.map(async (img) => {
-        let url = `${baseUrl}/i/${img.id}`;
+        const domain = img.domain || fallbackDomain;
+        let url = `https://${domain}/i/${img.id}`;
         if (img.isPrivate) {
           const token = await generateImageToken(
             img.id,
@@ -47,6 +48,7 @@ imagesRoute.get("/list", authMiddleware, async (c) => {
           sizeBytes: img.sizeBytes,
           isPrivate: img.isPrivate,
           createdAt: img.createdAt,
+          domain,
         };
       })
     );

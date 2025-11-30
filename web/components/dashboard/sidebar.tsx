@@ -44,6 +44,19 @@ const adminNavItems = [
         <path d="M21 20V19.5C21 17.567 19.433 16 17.5 16H17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     ),
+    exact: true,
+  },
+  {
+    label: "Domains",
+    href: "/dashboard/admin/domains",
+    icon: (
+      <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M3 12h18" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M12 3c2.5 2.5 4 5.5 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.5-4-9s1.5-6.5 4-9z" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    ),
+    exact: true,
   },
 ];
 
@@ -173,7 +186,7 @@ export function Sidebar() {
               <NavItem
                 key={item.href}
                 item={item}
-                isActive={pathname.startsWith(item.href)}
+                isActive={item.exact ? pathname === item.href : pathname.startsWith(item.href)}
               />
             ))}
           </>

@@ -10,6 +10,9 @@ export type Bindings = {
   TOKEN_SECRET: string;
   RESEND_API_KEY: string;
   BETTER_AUTH_SECRET: string;
+  DNS_TARGET?: string;
+  CLOUDFLARE_ZONE_ID: string;
+  CLOUDFLARE_API_TOKEN: string;
 };
 
 export type Variables = {

@@ -1,17 +1,119 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@/components/ui";
 import * as motion from "motion/react-client";
+import { AnimatePresence } from "motion/react";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+
+interface Domain {
+  id: string;
+  domain: string;
+  isDefault: boolean;
+}
 
 export default function SettingsPage() {
-  const { apiKey, regenerateApiKey, setApiKey } = useAuth();
+  const { apiKey, regenerateApiKey, user } = useAuth();
+  const queryClient = useQueryClient();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+  const [isLoadingDomains, setIsLoadingDomains] = useState(true);
+  const [isSavingDomain, setIsSavingDomain] = useState(false);
+  const [domainError, setDomainError] = useState<string | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    async function fetchDomains() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/me/domains`, {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          let domainList = data.domains || [];
+
+          // Ensure there's always a default domain option
+          const hasDefault = domainList.some((d: Domain) => d.isDefault);
+          if (!hasDefault && domainList.length === 0) {
+            // Add formality.life as fallback if no domains exist
+            domainList = [{ id: "default", domain: "formality.life", isDefault: true }];
+          }
+
+          setDomains(domainList);
+        }
+      } catch {
+        console.error("Failed to fetch domains");
+        // Fallback to default domain on error
+        setDomains([{ id: "default", domain: "formality.life", isDefault: true }]);
+      } finally {
+        setIsLoadingDomains(false);
+      }
+    }
+    fetchDomains();
+  }, []);
+
+  useEffect(() => {
+    if (user?.domainId) {
+      setSelectedDomainId(user.domainId);
+    } else if (domains.length > 0) {
+      // User has no domain set, select the default one
+      const defaultDomain = domains.find(d => d.isDefault);
+      if (defaultDomain) {
+        setSelectedDomainId(defaultDomain.id);
+      } else {
+        // No default marked, just select the first one
+        setSelectedDomainId(domains[0].id);
+      }
+    }
+  }, [user?.domainId, domains]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleDomainChange = async (domainId: string) => {
+    setIsDropdownOpen(false);
+    if (domainId === selectedDomainId) return;
+
+    setIsSavingDomain(true);
+    setDomainError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/me/domain`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domainId }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to update domain");
+      }
+      setSelectedDomainId(domainId);
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+    } catch {
+      setDomainError("Failed to update domain. Please try again.");
+    } finally {
+      setIsSavingDomain(false);
+    }
+  };
+
+  const selectedDomain = domains.find(d => d.id === selectedDomainId);
+  const selectedDomainName = selectedDomain?.domain || domains.find(d => d.isDefault)?.domain || "formality.life";
 
   const handleRegenerate = async () => {
     if (!confirm("Are you sure you want to regenerate your API key? Your old key will stop working immediately.")) {
@@ -146,6 +248,157 @@ export default function SettingsPage() {
             {isRegenerating ? "Regenerating..." : "Regenerate Key"}
           </Button>
         </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-text-primary">Upload Domain</h2>
+          <p className="mt-1 text-sm text-text-secondary">
+            Choose the domain for your new image URLs
+          </p>
+        </div>
+
+        {isLoadingDomains ? (
+          <div className="flex items-center gap-3 text-text-muted">
+            <div className="h-5 w-5 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+            <span className="text-sm">Loading domains...</span>
+          </div>
+        ) : domains.length === 0 ? (
+          <div className="rounded-[--radius-md] border border-dashed border-border-default p-6 text-center">
+            <svg className="mx-auto h-8 w-8 text-text-muted mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+            </svg>
+            <p className="text-sm text-text-muted">No domains configured yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                disabled={isSavingDomain}
+                className={`
+                  w-full flex items-center justify-between gap-3
+                  rounded-[--radius-md] border px-4 py-3
+                  transition-all duration-200 ease-out
+                  ${isDropdownOpen
+                    ? "border-accent bg-accent/5 ring-1 ring-accent/20"
+                    : "border-border-default bg-bg-tertiary hover:border-border-focus hover:bg-bg-hover"
+                  }
+                  ${isSavingDomain ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10">
+                    <svg className="h-4 w-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-text-primary">{selectedDomainName}</p>
+                    <p className="text-xs text-text-muted">
+                      {selectedDomain?.isDefault || !selectedDomain ? "Default domain" : "Custom domain"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isSavingDomain && (
+                    <div className="h-4 w-4 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+                  )}
+                  <motion.svg
+                    animate={{ rotate: isDropdownOpen ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="h-5 w-5 text-text-muted"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </motion.svg>
+                </div>
+              </button>
+
+              <AnimatePresence>
+                {isDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                    className="absolute z-50 mt-2 w-full overflow-hidden rounded-[--radius-md] border border-border-default bg-bg-secondary shadow-xl shadow-black/20"
+                  >
+                    <div className="py-1">
+                      {domains.map((domain, index) => (
+                        <motion.button
+                          key={domain.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.15, delay: index * 0.03 }}
+                          onClick={() => handleDomainChange(domain.id)}
+                          className={`
+                            w-full flex items-center gap-3 px-4 py-3
+                            transition-colors duration-150
+                            ${selectedDomainId === domain.id
+                              ? "bg-accent/10 text-accent"
+                              : "text-text-primary hover:bg-bg-hover"
+                            }
+                          `}
+                        >
+                          <div className={`
+                            flex h-6 w-6 items-center justify-center rounded-full
+                            ${selectedDomainId === domain.id ? "bg-accent/20" : "bg-bg-tertiary"}
+                          `}>
+                            {selectedDomainId === domain.id ? (
+                              <svg className="h-3.5 w-3.5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="h-3.5 w-3.5 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <circle cx="12" cy="12" r="8" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex-1 text-left">
+                            <span className="font-medium">{domain.domain}</span>
+                            {domain.isDefault && (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent uppercase tracking-wide">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="rounded-[--radius-md] bg-bg-tertiary/50 border border-border-subtle p-4">
+              <p className="text-xs text-text-muted mb-2 uppercase tracking-wide font-medium">Preview</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 font-[family-name:var(--font-geist-mono)] text-sm text-text-secondary">
+                  https://<span className="text-accent">{selectedDomainName}</span>/i/<span className="text-text-muted">abc123</span>
+                </code>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {domainError && (
+          <motion.p
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 text-sm text-error"
+          >
+            {domainError}
+          </motion.p>
+        )}
+
+        <p className="mt-4 text-xs text-text-muted">
+          Changing your domain only affects new uploads. Existing images keep their original URLs.
+        </p>
       </Card>
     </div>
   );

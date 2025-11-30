@@ -32,4 +32,5 @@ export {
   useAdminApproveWaitlist,
   useAdminRejectWaitlist,
   useAdminDeleteWaitlist,
+  adminDomainsQuery,
 } from "./admin";
