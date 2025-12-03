@@ -9,6 +9,7 @@ import { AnimatePresence } from "motion/react";
 import type { Image } from "@/lib/api";
 import { ImageLightbox } from "./image-lightbox";
 import { FallbackImage } from "@/components/ui";
+import { useMasonryOrder } from "@/lib/hooks/use-masonry-order";
 
 const DEFAULT_DOMAIN = "formality.life";
 
@@ -29,40 +30,6 @@ function formatBytes(bytes: number | null): string {
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
-function getTimeGroup(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHours < 1) return "Just now";
-    return "Today";
-  }
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return "This week";
-  if (diffDays < 30) return "This month";
-  return "Earlier";
-}
-
-function groupImagesByTime(images: Image[]): Record<string, Image[]> {
-  const groups: Record<string, Image[]> = {};
-  const order = ["Just now", "Today", "Yesterday", "This week", "This month", "Earlier"];
-
-  for (const image of images) {
-    const group = getTimeGroup(image.createdAt);
-    if (!groups[group]) groups[group] = [];
-    groups[group].push(image);
-  }
-
-  const sorted: Record<string, Image[]> = {};
-  for (const key of order) {
-    if (groups[key]) sorted[key] = groups[key];
-  }
-  return sorted;
 }
 
 interface ImageGridProps {
@@ -88,17 +55,20 @@ function ImageCard({
   deleteConfirm: boolean;
   isUpdating: boolean;
 }) {
+  const [isLoaded, setIsLoaded] = useState(false);
+
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="group relative cursor-pointer"
+      className="group relative mb-4 cursor-pointer break-inside-avoid"
       onClick={onClick}
     >
-      <div className="relative aspect-[4/3] overflow-hidden rounded-[--radius-lg] bg-bg-tertiary border border-border-default transition-all duration-300 group-hover:border-border-subtle group-hover:shadow-xl group-hover:shadow-black/40">
-        {/* Image */}
+      <div className="relative overflow-hidden rounded-[--radius-lg] bg-bg-tertiary border border-border-default transition-all duration-300 group-hover:border-border-subtle group-hover:shadow-xl group-hover:shadow-black/40">
+        {!isLoaded && (
+          <div className="aspect-[4/3] animate-pulse bg-bg-tertiary" />
+        )}
         <FallbackImage
           src={image.url}
           domain={image.domain}
@@ -106,8 +76,9 @@ function ImageCard({
           isPrivate={image.isPrivate}
           onFallback={onFallback}
           alt={image.originalName || image.id}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className={`w-full h-auto transition-transform duration-500 group-hover:scale-105 ${!isLoaded ? "absolute inset-0 opacity-0" : ""}`}
           loading="lazy"
+          onLoad={() => setIsLoaded(true)}
         />
 
         {/* Gradient overlay on hover */}
@@ -204,6 +175,7 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [fallbackImages, setFallbackImages] = useState<Set<string>>(new Set());
+  const { reorderItems } = useMasonryOrder();
 
   const { data, isLoading, error } = useQuery(imagesQuery(apiKey || ""));
   const updateMutation = useUpdateImage(apiKey || "");
@@ -273,20 +245,16 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
   };
 
   if (isLoading) {
+    const skeletonHeights = [180, 240, 160, 280, 200, 220, 190, 260];
     return (
-      <div className="space-y-8">
-        <div>
-          <div className="mb-4 h-5 w-20 animate-pulse rounded bg-bg-tertiary" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-              <div
-                key={i}
-                className="aspect-[4/3] animate-pulse rounded-[--radius-lg] bg-bg-tertiary"
-                style={{ animationDelay: `${i * 100}ms` }}
-              />
-            ))}
-          </div>
-        </div>
+      <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
+        {skeletonHeights.map((height, i) => (
+          <div
+            key={i}
+            className="mb-4 animate-pulse rounded-[--radius-lg] bg-bg-tertiary break-inside-avoid"
+            style={{ height: `${height}px`, animationDelay: `${i * 100}ms` }}
+          />
+        ))}
       </div>
     );
   }
@@ -321,45 +289,30 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
     );
   }
 
-  const groupedImages = groupImagesByTime(allImages);
-
   return (
     <>
-      <div className="space-y-10">
-        {Object.entries(groupedImages).map(([group, images]) => (
-          <section key={group}>
-            <div className="mb-4 flex items-center gap-3">
-              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-                {group}
-              </h3>
-              <div className="h-px flex-1 bg-border-subtle" />
-              <span className="text-xs text-text-muted">{images.length}</span>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {images.map((image) => (
-                <ImageCard
-                  key={image.id}
-                  image={image}
-                  onClick={() => openLightbox(image.id)}
-                  onCopy={(e) => {
-                    e.stopPropagation();
-                    handleCopy(image.id);
-                  }}
-                  onToggleVisibility={(e) => {
-                    e.stopPropagation();
-                    handleToggleVisibility(image.id);
-                  }}
-                  onDelete={(e) => {
-                    e.stopPropagation();
-                    handleDelete(image.id);
-                  }}
-                  onFallback={handleImageFallback}
-                  deleteConfirm={deleteConfirm === image.id}
-                  isUpdating={updateMutation.isPending}
-                />
-              ))}
-            </div>
-          </section>
+      <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
+        {reorderItems(allImages).map((image) => (
+          <ImageCard
+            key={image.id}
+            image={image}
+            onClick={() => openLightbox(image.id)}
+            onCopy={(e) => {
+              e.stopPropagation();
+              handleCopy(image.id);
+            }}
+            onToggleVisibility={(e) => {
+              e.stopPropagation();
+              handleToggleVisibility(image.id);
+            }}
+            onDelete={(e) => {
+              e.stopPropagation();
+              handleDelete(image.id);
+            }}
+            onFallback={handleImageFallback}
+            deleteConfirm={deleteConfirm === image.id}
+            isUpdating={updateMutation.isPending}
+          />
         ))}
       </div>
 
