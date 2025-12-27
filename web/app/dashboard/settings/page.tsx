@@ -9,6 +9,20 @@ import { AnimatePresence } from "motion/react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
 
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function getProgressColor(percent: number): string {
+  if (percent >= 90) return "bg-error";
+  if (percent >= 75) return "bg-warning";
+  return "bg-accent";
+}
+
 interface Domain {
   id: string;
   domain: string;
@@ -384,6 +398,65 @@ export default function SettingsPage() {
             {isRegenerating ? "Regenerating..." : "Regenerate Key"}
           </Button>
         </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-text-primary">Storage</h2>
+          <p className="mt-1 text-sm text-text-secondary">
+            Your storage usage and limits
+          </p>
+        </div>
+
+        {user?.storageBytes !== undefined && user?.storageLimitBytes !== undefined ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xl font-bold text-text-primary">
+                  {formatBytes(user.storageBytes)}
+                </p>
+                <p className="text-sm text-text-muted">
+                  of {formatBytes(user.storageLimitBytes)} used
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-semibold text-text-secondary">
+                  {formatBytes(user.storageLimitBytes - user.storageBytes)}
+                </p>
+                <p className="text-sm text-text-muted">remaining</p>
+              </div>
+            </div>
+
+            <div className="h-3 w-full overflow-hidden rounded-full bg-bg-tertiary">
+              <div
+                className={`h-full rounded-full transition-all ${getProgressColor(Math.round((user.storageBytes / user.storageLimitBytes) * 100))}`}
+                style={{ width: `${Math.min((user.storageBytes / user.storageLimitBytes) * 100, 100)}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <span className={Math.round((user.storageBytes / user.storageLimitBytes) * 100) >= 90 ? "text-error" : Math.round((user.storageBytes / user.storageLimitBytes) * 100) >= 75 ? "text-warning" : "text-text-muted"}>
+                {Math.round((user.storageBytes / user.storageLimitBytes) * 100)}% used
+              </span>
+              <span className="text-text-muted">
+                {user.imageCount} {user.imageCount === 1 ? "image" : "images"}
+              </span>
+            </div>
+
+            {Math.round((user.storageBytes / user.storageLimitBytes) * 100) >= 90 && (
+              <div className="rounded-[--radius-md] border border-warning/20 bg-warning/5 px-3 py-2.5">
+                <p className="text-xs text-warning">
+                  You&apos;re running low on storage. Consider deleting old images to free up space.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 text-text-muted">
+            <div className="h-5 w-5 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+            <span className="text-sm">Loading storage info...</span>
+          </div>
+        )}
       </Card>
 
       <Card className="p-6">

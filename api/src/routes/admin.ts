@@ -73,6 +73,7 @@ admin.get("/users", async (c) => {
         name: users.name,
         isActive: users.isActive,
         createdAt: users.createdAt,
+        storageLimitBytes: users.storageLimitBytes,
         imageCount: sql<number>`COUNT(CASE WHEN ${images.id} IS NOT NULL AND ${images.deletedAt} IS NULL THEN 1 END)::int`,
         storageBytes: sql<number>`COALESCE(SUM(CASE WHEN ${images.deletedAt} IS NULL THEN ${images.sizeBytes} END), 0)::bigint`,
       })
@@ -136,6 +137,49 @@ admin.post("/users/:id/regenerate-key", async (c) => {
   } catch (error) {
     console.error("Failed to regenerate API key:", error);
     return c.json({ error: "Failed to regenerate API key" }, 500);
+  }
+});
+
+admin.patch("/users/:id", async (c) => {
+  const id = c.req.param("id");
+
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: "Invalid ID format" }, 400);
+  }
+
+  try {
+    const db = createDb(c.env.DATABASE_URL);
+    const body = await c.req.json<{ storageLimitBytes?: number | null }>();
+
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+
+    if (!user) {
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    if (body.storageLimitBytes !== undefined) {
+      if (
+        body.storageLimitBytes !== null &&
+        (typeof body.storageLimitBytes !== "number" || body.storageLimitBytes < 0)
+      ) {
+        return c.json({ error: "Invalid storage limit value" }, 400);
+      }
+    }
+
+    const result = await db
+      .update(users)
+      .set({
+        ...(body.storageLimitBytes !== undefined && {
+          storageLimitBytes: body.storageLimitBytes,
+        }),
+      })
+      .where(eq(users.id, id))
+      .returning();
+
+    return c.json({ user: result[0] });
+  } catch (error) {
+    console.error("Failed to update user:", error);
+    return c.json({ error: "Failed to update user" }, 500);
   }
 });
 

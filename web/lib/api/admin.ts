@@ -110,6 +110,29 @@ export function useAdminRegenerateKey(adminKey: string) {
   });
 }
 
+export function useAdminUpdateUser(adminKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      storageLimitBytes,
+    }: {
+      userId: string;
+      storageLimitBytes: number | null;
+    }) => {
+      return adminClient<{ user: AdminUser }>(`/admin/users/${userId}`, adminKey, {
+        method: "PATCH",
+        body: JSON.stringify({ storageLimitBytes }),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+    },
+  });
+}
+
 export function adminWaitlistQuery(adminKey: string, status?: string) {
   return queryOptions({
     queryKey: [...adminKeys.waitlist(), status],

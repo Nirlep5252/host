@@ -9,6 +9,20 @@ import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 import { fadeIn, scaleIn, transition } from "@/lib/motion";
 
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function getProgressColor(percent: number): string {
+  if (percent >= 90) return "bg-error";
+  if (percent >= 75) return "bg-warning";
+  return "bg-accent";
+}
+
 export default function DashboardPage() {
   const { user, apiKey } = useAuth();
   const { toast } = useToast();
@@ -84,6 +98,22 @@ export default function DashboardPage() {
           <p className="mt-1 text-sm text-text-muted">
             {user?.imageCount || 0} images in your library
           </p>
+          {user?.storageBytes !== undefined && user?.storageLimitBytes !== undefined && (
+            <div className="mt-2">
+              <div className="flex items-center gap-2 text-xs text-text-muted">
+                <span>{formatBytes(user.storageBytes)} / {formatBytes(user.storageLimitBytes)} used</span>
+                <span className={Math.round((user.storageBytes / user.storageLimitBytes) * 100) >= 90 ? "text-error" : Math.round((user.storageBytes / user.storageLimitBytes) * 100) >= 75 ? "text-warning" : ""}>
+                  ({Math.round((user.storageBytes / user.storageLimitBytes) * 100)}%)
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 w-48 overflow-hidden rounded-full bg-bg-tertiary">
+                <div
+                  className={`h-full rounded-full transition-all ${getProgressColor(Math.round((user.storageBytes / user.storageLimitBytes) * 100))}`}
+                  style={{ width: `${Math.min((user.storageBytes / user.storageLimitBytes) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Upload button */}

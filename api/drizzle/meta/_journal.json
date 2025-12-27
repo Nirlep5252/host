@@ -43,6 +43,13 @@
       "when": 1764516622698,
       "tag": "0005_slippery_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1766838925254,
+      "tag": "0006_modern_fixer",
+      "breakpoints": true
     }
   ]
 }

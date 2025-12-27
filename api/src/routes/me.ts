@@ -1,10 +1,11 @@
 import { Hono } from "hono";
-import { eq, and, isNull, count, or } from "drizzle-orm";
+import { eq, and, isNull, count, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { createDb, images, users, domains, type User } from "../db";
 import { verifyApiKey, hashApiKey } from "../middleware/auth";
 import { sessionMiddleware, requireSession } from "../middleware/session";
 import { CloudflareAPI } from "../lib/cloudflare";
+import { getEffectiveStorageLimit } from "../lib/storage";
 import type { Bindings, Variables } from "../types";
 
 const MAX_USER_DOMAINS = 10;
@@ -48,6 +49,16 @@ me.get("/", async (c) => {
       .from(images)
       .where(and(eq(images.userId, user.id), isNull(images.deletedAt)));
 
+    const [storageResult] = await db
+      .select({
+        storageBytes: sql<string>`COALESCE(SUM(CASE WHEN ${images.deletedAt} IS NULL THEN ${images.sizeBytes} END), 0)::bigint`,
+      })
+      .from(images)
+      .where(eq(images.userId, user.id));
+
+    const storageBytes = Number(storageResult?.storageBytes || 0);
+    const storageLimitBytes = getEffectiveStorageLimit(user.storageLimitBytes);
+
     let domain: string | null = null;
     if (user.domainId) {
       const [userDomain] = await db
@@ -74,6 +85,8 @@ me.get("/", async (c) => {
       hasApiKey: !!user.apiKeyHash,
       domain,
       domainId: user.domainId,
+      storageBytes,
+      storageLimitBytes,
     });
   } catch (error) {
     console.error("Failed to fetch user info:", error);

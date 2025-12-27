@@ -6,6 +6,8 @@ export interface User {
   imageCount: number;
   isAdmin: boolean;
   hasApiKey?: boolean;
+  storageBytes: number;
+  storageLimitBytes: number;
 }
 
 export interface AdminUser {
@@ -16,6 +18,7 @@ export interface AdminUser {
   createdAt: string;
   imageCount: number;
   storageBytes: number;
+  storageLimitBytes: number | null;
 }
 
 export interface AdminUsersResponse {

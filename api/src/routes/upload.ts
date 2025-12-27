@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
-import { eq } from "drizzle-orm";
+import { eq, sql, isNull } from "drizzle-orm";
 import { uploadFile, deleteFile } from "../storage";
 import { createDb, images, domains, users } from "../db";
 import { authMiddleware } from "../middleware/auth";
 import { uploadRateLimit } from "../middleware/rate-limit";
+import { getEffectiveStorageLimit } from "../lib/storage";
 import type { Bindings, Variables } from "../types";
 
 const upload = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -98,9 +99,39 @@ upload.post("/", authMiddleware, async (c) => {
     const key = `${id}${ext}`;
 
     const buffer = await file.arrayBuffer();
-    await uploadFile(c.env.R2, key, buffer, file.type);
 
     const db = createDb(c.env.DATABASE_URL);
+
+    const [storageResult] = await db
+      .select({
+        currentUsage: sql<string>`COALESCE(SUM(CASE WHEN ${images.deletedAt} IS NULL THEN ${images.sizeBytes} END), 0)::bigint`,
+      })
+      .from(images)
+      .where(eq(images.userId, user.id));
+
+    const [userRecord] = await db
+      .select({ storageLimitBytes: users.storageLimitBytes })
+      .from(users)
+      .where(eq(users.id, user.id));
+
+    const currentUsage = Number(storageResult?.currentUsage || 0);
+    const storageLimit = getEffectiveStorageLimit(
+      userRecord?.storageLimitBytes ?? null
+    );
+
+    if (currentUsage + buffer.byteLength > storageLimit) {
+      return c.json(
+        {
+          error: "Storage limit exceeded",
+          currentUsage,
+          storageLimit,
+          fileSize: buffer.byteLength,
+        },
+        413
+      );
+    }
+
+    await uploadFile(c.env.R2, key, buffer, file.type);
 
     let userDomain: string | null = null;
     const [freshUser] = await db

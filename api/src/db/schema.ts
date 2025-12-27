@@ -7,6 +7,7 @@ import {
   boolean,
   integer,
   text,
+  bigint,
 } from "drizzle-orm/pg-core";
 
 export const domains = pgTable("domains", {
@@ -33,6 +34,7 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: varchar("image", { length: 255 }),
   domainId: uuid("domain_id").references(() => domains.id),
+  storageLimitBytes: bigint("storage_limit_bytes", { mode: "number" }),
 });
 
 export const session = pgTable("session", {

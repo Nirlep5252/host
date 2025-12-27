@@ -28,6 +28,7 @@ export {
   useAdminCreateUser,
   useAdminDeleteUser,
   useAdminRegenerateKey,
+  useAdminUpdateUser,
   adminWaitlistQuery,
   useAdminApproveWaitlist,
   useAdminRejectWaitlist,

@@ -2,11 +2,21 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useAdminDeleteUser, useAdminRegenerateKey } from "@/lib/api";
+import { useAdminDeleteUser, useAdminRegenerateKey, useAdminUpdateUser } from "@/lib/api";
 import type { AdminUser } from "@/lib/api";
 import { Button } from "@/components/ui";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
+
+const DEFAULT_STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
+
+const STORAGE_PRESETS = [
+  { label: "1 GB", bytes: 1 * 1024 * 1024 * 1024 },
+  { label: "5 GB", bytes: 5 * 1024 * 1024 * 1024 },
+  { label: "10 GB", bytes: 10 * 1024 * 1024 * 1024 },
+  { label: "50 GB", bytes: 50 * 1024 * 1024 * 1024 },
+  { label: "100 GB", bytes: 100 * 1024 * 1024 * 1024 },
+];
 
 interface UserTableProps {
   users: AdminUser[];
@@ -14,9 +24,10 @@ interface UserTableProps {
 }
 
 type ActionState = {
-  type: "delete" | "regenerate" | "key-result";
+  type: "delete" | "regenerate" | "key-result" | "edit-storage";
   userId: string;
   key?: string;
+  currentLimit?: number | null;
 };
 
 function getInitials(email: string, name?: string | null): string {
@@ -54,12 +65,35 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
+function getStorageLimit(storageLimitBytes: number | null): number {
+  return storageLimitBytes ?? DEFAULT_STORAGE_LIMIT_BYTES;
+}
+
+function getUsagePercent(used: number, limit: number): number {
+  if (limit === 0) return 0;
+  return Math.min(Math.round((used / limit) * 100), 100);
+}
+
+function getUsageColor(percent: number): string {
+  if (percent >= 90) return "text-error";
+  if (percent >= 75) return "text-warning";
+  return "text-text-muted";
+}
+
+function getProgressColor(percent: number): string {
+  if (percent >= 90) return "bg-error";
+  if (percent >= 75) return "bg-warning";
+  return "bg-accent";
+}
+
 export function UserTable({ users, onCopyKey }: UserTableProps) {
   const { adminKey } = useAuth();
   const deleteMutation = useAdminDeleteUser(adminKey || "");
   const regenerateMutation = useAdminRegenerateKey(adminKey || "");
+  const updateUserMutation = useAdminUpdateUser(adminKey || "");
   const [actionState, setActionState] = useState<ActionState | null>(null);
   const [copied, setCopied] = useState(false);
+  const [customStorageInput, setCustomStorageInput] = useState("");
 
   const handleDelete = async (userId: string) => {
     if (actionState?.type === "delete" && actionState.userId === userId) {
@@ -99,6 +133,37 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
   const closeKeyResult = () => {
     setActionState(null);
     setCopied(false);
+  };
+
+  const openStorageEdit = (user: AdminUser) => {
+    setActionState({
+      type: "edit-storage",
+      userId: user.id,
+      currentLimit: user.storageLimitBytes,
+    });
+    setCustomStorageInput("");
+  };
+
+  const handleStorageLimitUpdate = async (bytes: number | null) => {
+    if (!actionState || actionState.type !== "edit-storage") return;
+    await updateUserMutation.mutateAsync({
+      userId: actionState.userId,
+      storageLimitBytes: bytes,
+    });
+    setActionState(null);
+    setCustomStorageInput("");
+  };
+
+  const handleCustomStorageSubmit = () => {
+    const gb = parseFloat(customStorageInput);
+    if (!isNaN(gb) && gb > 0) {
+      handleStorageLimitUpdate(gb * 1024 * 1024 * 1024);
+    }
+  };
+
+  const closeStorageEdit = () => {
+    setActionState(null);
+    setCustomStorageInput("");
   };
 
   const formatDate = (dateStr: string) => {
@@ -150,9 +215,31 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
                 {user.name || user.email.split("@")[0]}
               </p>
               <p className="mt-0.5 truncate text-sm text-text-muted">{user.email}</p>
-              <p className="mt-1.5 text-xs text-text-secondary">
-                {user.imageCount} {user.imageCount === 1 ? "image" : "images"} · {formatBytes(user.storageBytes)}
-              </p>
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-text-secondary">
+                    {user.imageCount} {user.imageCount === 1 ? "image" : "images"}
+                  </span>
+                  <button
+                    onClick={() => openStorageEdit(user)}
+                    className="flex items-center gap-1 text-text-muted transition-colors hover:text-accent"
+                    title="Edit storage limit"
+                  >
+                    <span className={getUsageColor(getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes)))}>
+                      {formatBytes(user.storageBytes)} / {formatBytes(getStorageLimit(user.storageLimitBytes))}
+                    </span>
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-bg-tertiary">
+                  <div
+                    className={`h-full rounded-full transition-all ${getProgressColor(getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes)))}`}
+                    style={{ width: `${getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes))}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Footer: Date + Actions */}
@@ -265,6 +352,100 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
 
                 <Button variant="primary" className="w-full" onClick={closeKeyResult}>
                   Done
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Storage Edit Modal */}
+      <AnimatePresence>
+        {actionState?.type === "edit-storage" && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-primary/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-[--radius-lg] border border-border-default bg-bg-secondary p-6 shadow-2xl"
+            >
+              <div className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10">
+                    <svg className="h-5 w-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-text-primary">
+                      Storage Limit
+                    </h2>
+                    <p className="text-sm text-text-muted">
+                      Current: {formatBytes(getStorageLimit(actionState.currentLimit ?? null))}
+                      {actionState.currentLimit === null && " (default)"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-xs font-medium uppercase tracking-wider text-text-muted">
+                    Preset Limits
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {STORAGE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.bytes}
+                        onClick={() => handleStorageLimitUpdate(preset.bytes)}
+                        disabled={updateUserMutation.isPending}
+                        className={`rounded-[--radius-md] border px-3 py-2 text-sm font-medium transition-all disabled:opacity-50 ${
+                          getStorageLimit(actionState.currentLimit ?? null) === preset.bytes
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border-default bg-bg-tertiary text-text-secondary hover:border-accent/50 hover:text-text-primary"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => handleStorageLimitUpdate(null)}
+                      disabled={updateUserMutation.isPending}
+                      className={`rounded-[--radius-md] border px-3 py-2 text-sm font-medium transition-all disabled:opacity-50 ${
+                        actionState.currentLimit === null
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-border-default bg-bg-tertiary text-text-secondary hover:border-accent/50 hover:text-text-primary"
+                      }`}
+                    >
+                      Default
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wider text-text-muted">
+                    Custom (GB)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={customStorageInput}
+                      onChange={(e) => setCustomStorageInput(e.target.value)}
+                      placeholder="e.g. 25"
+                      className="flex-1 rounded-[--radius-md] border border-border-default bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={handleCustomStorageSubmit}
+                      disabled={updateUserMutation.isPending || !customStorageInput}
+                    >
+                      Set
+                    </Button>
+                  </div>
+                </div>
+
+                <Button variant="ghost" className="w-full" onClick={closeStorageEdit}>
+                  Cancel
                 </Button>
               </div>
             </motion.div>

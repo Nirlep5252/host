@@ -25,6 +25,8 @@ export interface User {
   hasApiKey?: boolean;
   domain?: string | null;
   domainId?: string | null;
+  storageBytes?: number;
+  storageLimitBytes?: number;
 }
 
 interface AuthContextType {
