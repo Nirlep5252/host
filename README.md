@@ -112,7 +112,3 @@ vercel
 
 1. Log in to the dashboard
 2. Download ShareX config from sidebar
-
-## License
-
-MIT
