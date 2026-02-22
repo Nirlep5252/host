@@ -18,7 +18,7 @@ app.use(
   cors({
     origin: ["http://localhost:3000", "https://web.formality.life"],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "X-API-Key", "X-Admin-Key"],
+    allowHeaders: ["Content-Type", "X-API-Key", "X-Admin-Key", "User-Agent"],
     exposeHeaders: ["Content-Length"],
     maxAge: 86400,
     credentials: true,
