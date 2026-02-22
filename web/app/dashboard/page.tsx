@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast, Button } from "@/components/ui";
 import { useUploadImage } from "@/lib/api";
@@ -77,6 +77,27 @@ export default function DashboardPage() {
     },
     [handleUpload]
   );
+
+  useEffect(() => {
+    if (!isUploadExpanded) return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) handleUpload(file);
+          return;
+        }
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [isUploadExpanded, handleUpload]);
 
   const handleCopySuccess = () => {
     toast("URL copied to clipboard");
@@ -160,7 +181,7 @@ export default function DashboardPage() {
                     </svg>
                   </div>
                   <p className="text-center text-sm text-text-secondary">
-                    <span className="font-medium text-text-primary">Drop an image</span> or{" "}
+                    <span className="font-medium text-text-primary">Drop or paste an image</span> or{" "}
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="font-medium text-accent hover:underline"
