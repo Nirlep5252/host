@@ -5,7 +5,7 @@ export interface User {
   createdAt: string;
   imageCount: number;
   isAdmin: boolean;
-  hasApiKey?: boolean;
+  apiKeyCount?: number;
   storageBytes: number;
   storageLimitBytes: number;
 }
@@ -43,12 +43,13 @@ export interface AdminDeleteUserResponse {
   id: string;
 }
 
-export interface AdminRegenerateKeyResponse {
-  id: string;
-  email: string;
-  name: string | null;
+export interface AdminCreateKeyResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
   apiKey: string;
-  createdAt: string;
 }
 
 export interface Image {

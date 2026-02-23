@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useAdminDeleteUser, useAdminRegenerateKey, useAdminUpdateUser } from "@/lib/api";
+import { useAdminDeleteUser, useAdminCreateKey, useAdminUpdateUser } from "@/lib/api";
 import type { AdminUser } from "@/lib/api";
 import { Button } from "@/components/ui";
 import * as motion from "motion/react-client";
@@ -24,7 +24,7 @@ interface UserTableProps {
 }
 
 type ActionState = {
-  type: "delete" | "regenerate" | "key-result" | "edit-storage";
+  type: "delete" | "create-key" | "key-result" | "edit-storage";
   userId: string;
   key?: string;
   currentLimit?: number | null;
@@ -89,7 +89,7 @@ function getProgressColor(percent: number): string {
 export function UserTable({ users, onCopyKey }: UserTableProps) {
   const { adminKey } = useAuth();
   const deleteMutation = useAdminDeleteUser(adminKey || "");
-  const regenerateMutation = useAdminRegenerateKey(adminKey || "");
+  const createKeyMutation = useAdminCreateKey(adminKey || "");
   const updateUserMutation = useAdminUpdateUser(adminKey || "");
   const [actionState, setActionState] = useState<ActionState | null>(null);
   const [copied, setCopied] = useState(false);
@@ -109,15 +109,15 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
     }
   };
 
-  const handleRegenerate = async (userId: string) => {
-    if (actionState?.type === "regenerate" && actionState.userId === userId) {
-      const result = await regenerateMutation.mutateAsync(userId);
+  const handleCreateKey = async (userId: string) => {
+    if (actionState?.type === "create-key" && actionState.userId === userId) {
+      const result = await createKeyMutation.mutateAsync(userId);
       setActionState({ type: "key-result", userId, key: result.apiKey });
     } else {
-      setActionState({ type: "regenerate", userId });
+      setActionState({ type: "create-key", userId });
       setTimeout(() => {
         setActionState((current) =>
-          current?.type === "regenerate" && current.userId === userId ? null : current
+          current?.type === "create-key" && current.userId === userId ? null : current
         );
       }, 3000);
     }
@@ -247,19 +247,19 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
               <span className="text-xs text-text-muted">Joined {formatDate(user.createdAt)}</span>
 
               <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                {actionState?.type === "regenerate" && actionState.userId === user.id ? (
+                {actionState?.type === "create-key" && actionState.userId === user.id ? (
                   <button
-                    onClick={() => handleRegenerate(user.id)}
-                    disabled={regenerateMutation.isPending}
+                    onClick={() => handleCreateKey(user.id)}
+                    disabled={createKeyMutation.isPending}
                     className="rounded-[--radius-sm] bg-warning/10 px-2 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:opacity-50"
                   >
-                    {regenerateMutation.isPending ? "..." : "Confirm"}
+                    {createKeyMutation.isPending ? "..." : "Confirm"}
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleRegenerate(user.id)}
+                    onClick={() => handleCreateKey(user.id)}
                     className="rounded-[--radius-sm] p-1.5 text-text-muted transition-colors hover:bg-bg-tertiary hover:text-text-primary"
-                    title="Regenerate key"
+                    title="Create API key"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -313,7 +313,7 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
                   </div>
                   <div>
                     <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-text-primary">
-                      Key Regenerated
+                      Key Created
                     </h2>
                     <p className="text-sm text-text-muted">Copy the new key now</p>
                   </div>
@@ -346,7 +346,7 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
 
                 <div className="rounded-[--radius-md] border border-warning/20 bg-warning/5 px-3 py-2.5">
                   <p className="text-xs text-warning">
-                    The old key no longer works. Share this new key with the user.
+                    This key will only be shown once. Share it with the user now.
                   </p>
                 </div>
 

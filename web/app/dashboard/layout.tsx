@@ -12,7 +12,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, apiKey } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
@@ -23,10 +23,10 @@ export default function DashboardLayout({
   }, [isLoading, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && !apiKey) {
+    if (!isLoading && isAuthenticated && user && (user.apiKeyCount ?? 0) === 0) {
       setShowApiKeyModal(true);
     }
-  }, [isLoading, isAuthenticated, apiKey]);
+  }, [isLoading, isAuthenticated, user]);
 
   if (isLoading) {
     return (

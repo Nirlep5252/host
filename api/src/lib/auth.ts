@@ -7,6 +7,10 @@ import type { Database } from "../db";
 import * as schema from "../db/schema";
 import type { Bindings } from "../types";
 
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW = 5 * 60 * 1000; // 5 minutes
+const RATE_LIMIT_MAX = 3;
+
 export function createAuth(db: Database, env: Bindings) {
   const resend = new Resend(env.RESEND_API_KEY);
 
@@ -24,10 +28,39 @@ export function createAuth(db: Database, env: Bindings) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BASE_URL,
     basePath: "/api/auth",
-    trustedOrigins: ["http://localhost:3000", "https://web.formality.life"],
+    socialProviders: {
+      github: {
+        clientId: env.GITHUB_CLIENT_ID,
+        clientSecret: env.GITHUB_CLIENT_SECRET,
+        redirectURI: `${env.FRONTEND_URL}/api/auth/callback/github`,
+        disableImplicitSignUp: true,
+      },
+    },
+    account: {
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["github"],
+      },
+    },
+    trustedOrigins: [
+      "http://localhost:3000",
+      "http://host-web.localhost:1355",
+      "https://web.formality.life",
+    ],
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
+          const now = Date.now();
+          const timestamps = rateLimitMap.get(email) ?? [];
+          const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW);
+
+          if (recent.length >= RATE_LIMIT_MAX) {
+            return;
+          }
+
+          recent.push(now);
+          rateLimitMap.set(email, recent);
+
           const existingUser = await db
             .select({ id: schema.users.id })
             .from(schema.users)
@@ -80,6 +113,9 @@ export function createAuth(db: Database, env: Bindings) {
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // Update session every 24 hours
+    },
+    advanced: {
+      useSecureCookies: env.BASE_URL.startsWith("https"),
     },
   });
 }

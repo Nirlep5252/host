@@ -1,9 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import { eq, and } from "drizzle-orm";
-import { createDb, users, type User } from "../db";
+import { createDb, users, apiKeys, type User } from "../db";
 import type { Bindings } from "../types";
-import type { DrizzleD1Database } from "drizzle-orm/d1";
-import type { PgDatabase } from "drizzle-orm/pg-core";
 
 type AuthVariables = {
   user: User;
@@ -27,12 +25,22 @@ export async function verifyApiKey(
 
   const hashedKey = await hashApiKey(apiKey);
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(and(eq(users.apiKeyHash, hashedKey), eq(users.isActive, true)));
+  const [result] = await db
+    .select({ user: users, apiKey: apiKeys })
+    .from(apiKeys)
+    .innerJoin(users, eq(apiKeys.userId, users.id))
+    .where(and(eq(apiKeys.keyHash, hashedKey), eq(users.isActive, true)));
 
-  return user || null;
+  if (!result) return null;
+
+  // Update lastUsedAt in background (don't await)
+  db.update(apiKeys)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(apiKeys.keyHash, hashedKey))
+    .execute()
+    .catch(() => {});
+
+  return result.user;
 }
 
 export const authMiddleware = createMiddleware<{

@@ -13,7 +13,8 @@ import { adminClient } from "./api";
 
 const API_KEY_STORAGE_KEY = "host_api_key";
 const ADMIN_STORAGE_KEY = "host_admin_key";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+const API_BASE_URL =
+  typeof window !== "undefined" ? window.location.origin : "";
 
 export interface User {
   id: string;
@@ -22,11 +23,19 @@ export interface User {
   createdAt: string;
   imageCount?: number;
   isAdmin?: boolean;
-  hasApiKey?: boolean;
+  apiKeyCount?: number;
   domain?: string | null;
   domainId?: string | null;
   storageBytes?: number;
   storageLimitBytes?: number;
+}
+
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
 }
 
 interface AuthContextType {
@@ -39,7 +48,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   setAdminKey: (adminKey: string) => Promise<void>;
   clearAdminKey: () => void;
-  regenerateApiKey: () => Promise<string>;
+  createApiKey: (name: string) => Promise<string>;
+  revokeApiKey: (id: string) => Promise<void>;
   setApiKey: (key: string) => void;
 }
 
@@ -117,17 +127,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryClient.invalidateQueries({ queryKey: ["admin"] });
   }, [queryClient]);
 
-  const regenerateApiKey = useCallback(async (): Promise<string> => {
-    const response = await fetch(
-      `${API_BASE_URL}/me/regenerate-key`,
-      {
-        method: "POST",
-        credentials: "include",
-      }
-    );
+  const createApiKey = useCallback(async (name: string): Promise<string> => {
+    const response = await fetch(`${API_BASE_URL}/me/api-keys`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
 
     if (!response.ok) {
-      throw new Error("Failed to regenerate API key");
+      const data = await response.json();
+      throw new Error(data.error || "Failed to create API key");
     }
 
     const data = await response.json();
@@ -135,9 +145,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     localStorage.setItem(API_KEY_STORAGE_KEY, newKey);
     setApiKeyState(newKey);
+    queryClient.invalidateQueries({ queryKey: ["user-details"] });
+    queryClient.invalidateQueries({ queryKey: ["api-keys"] });
 
     return newKey;
-  }, []);
+  }, [queryClient]);
+
+  const revokeApiKey = useCallback(async (id: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/me/api-keys/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to revoke API key");
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["user-details"] });
+    queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+  }, [queryClient]);
 
   const setApiKey = useCallback((key: string) => {
     localStorage.setItem(API_KEY_STORAGE_KEY, key);
@@ -160,7 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         setAdminKey,
         clearAdminKey,
-        regenerateApiKey,
+        createApiKey,
+        revokeApiKey,
         setApiKey,
       }}
     >

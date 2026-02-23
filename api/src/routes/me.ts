@@ -1,12 +1,14 @@
 import { Hono } from "hono";
 import { eq, and, isNull, count, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { createDb, images, users, domains, type User } from "../db";
+import { createDb, images, users, domains, apiKeys, type User } from "../db";
 import { verifyApiKey, hashApiKey } from "../middleware/auth";
 import { sessionMiddleware, requireSession } from "../middleware/session";
 import { CloudflareAPI } from "../lib/cloudflare";
 import { getEffectiveStorageLimit } from "../lib/storage";
 import type { Bindings, Variables } from "../types";
+
+const MAX_API_KEYS = 10;
 
 const MAX_USER_DOMAINS = 10;
 
@@ -75,6 +77,11 @@ me.get("/", async (c) => {
       domain = defaultDomain?.domain ?? null;
     }
 
+    const [keyCount] = await db
+      .select({ count: count() })
+      .from(apiKeys)
+      .where(eq(apiKeys.userId, user.id));
+
     return c.json({
       id: user.id,
       email: user.email,
@@ -82,7 +89,7 @@ me.get("/", async (c) => {
       createdAt: user.createdAt,
       imageCount: stats?.count || 0,
       isAdmin: user.email === c.env.ADMIN_EMAIL,
-      hasApiKey: !!user.apiKeyHash,
+      apiKeyCount: keyCount?.count || 0,
       domain,
       domainId: user.domainId,
       storageBytes,
@@ -94,7 +101,7 @@ me.get("/", async (c) => {
   }
 });
 
-me.post("/regenerate-key", requireSession, async (c) => {
+me.get("/api-keys", requireSession, async (c) => {
   const sessionUser = c.get("sessionUser");
   if (!sessionUser) {
     return c.json({ error: "Unauthorized" }, 401);
@@ -103,33 +110,105 @@ me.post("/regenerate-key", requireSession, async (c) => {
   try {
     const db = createDb(c.env.DATABASE_URL);
 
-    const newKey = `sk_${nanoid(32)}`;
-    const hash = await hashApiKey(newKey);
+    const keys = await db
+      .select({
+        id: apiKeys.id,
+        name: apiKeys.name,
+        keyPrefix: apiKeys.keyPrefix,
+        createdAt: apiKeys.createdAt,
+        lastUsedAt: apiKeys.lastUsedAt,
+      })
+      .from(apiKeys)
+      .where(eq(apiKeys.userId, sessionUser.id))
+      .orderBy(apiKeys.createdAt);
 
-    await db
-      .update(users)
-      .set({ apiKeyHash: hash })
-      .where(eq(users.id, sessionUser.id));
-
-    return c.json({
-      apiKey: newKey,
-      message: "API key regenerated successfully. Save this key - it won't be shown again.",
-    });
+    return c.json({ keys });
   } catch (error) {
-    console.error("Failed to regenerate API key:", error);
-    return c.json({ error: "Failed to regenerate API key" }, 500);
+    console.error("Failed to fetch API keys:", error);
+    return c.json({ error: "Failed to fetch API keys" }, 500);
   }
 });
 
-me.get("/api-key", requireSession, async (c) => {
+me.post("/api-keys", requireSession, async (c) => {
   const sessionUser = c.get("sessionUser");
   if (!sessionUser) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  return c.json({
-    hasApiKey: !!sessionUser.apiKeyHash,
-  });
+  try {
+    const db = createDb(c.env.DATABASE_URL);
+    const body = await c.req.json<{ name: string }>();
+
+    const name = body.name?.trim();
+    if (!name || name.length === 0) {
+      return c.json({ error: "Key name is required" }, 400);
+    }
+    if (name.length > 100) {
+      return c.json({ error: "Key name must be 100 characters or less" }, 400);
+    }
+
+    // Check key limit
+    const [keyCount] = await db
+      .select({ count: count() })
+      .from(apiKeys)
+      .where(eq(apiKeys.userId, sessionUser.id));
+
+    if ((keyCount?.count || 0) >= MAX_API_KEYS) {
+      return c.json({ error: `You can have at most ${MAX_API_KEYS} API keys` }, 400);
+    }
+
+    const newKey = `sk_${nanoid(32)}`;
+    const hash = await hashApiKey(newKey);
+    const prefix = newKey.slice(0, 7);
+
+    await db.insert(apiKeys).values({
+      userId: sessionUser.id,
+      name,
+      keyHash: hash,
+      keyPrefix: prefix,
+    });
+
+    return c.json({
+      apiKey: newKey,
+      message: "API key created successfully. Save this key - it won't be shown again.",
+    });
+  } catch (error) {
+    console.error("Failed to create API key:", error);
+    return c.json({ error: "Failed to create API key" }, 500);
+  }
+});
+
+me.delete("/api-keys/:id", requireSession, async (c) => {
+  const sessionUser = c.get("sessionUser");
+  if (!sessionUser) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const keyId = c.req.param("id");
+  if (!keyId) {
+    return c.json({ error: "Key ID is required" }, 400);
+  }
+
+  try {
+    const db = createDb(c.env.DATABASE_URL);
+
+    // Verify ownership
+    const [key] = await db
+      .select({ id: apiKeys.id })
+      .from(apiKeys)
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, sessionUser.id)));
+
+    if (!key) {
+      return c.json({ error: "API key not found" }, 404);
+    }
+
+    await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete API key:", error);
+    return c.json({ error: "Failed to delete API key" }, 500);
+  }
 });
 
 me.get("/domains", async (c) => {

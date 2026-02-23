@@ -2,7 +2,8 @@ import { createAuthClient } from "better-auth/react";
 import { magicLinkClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "https://formality.life",
+  // Auth requests go through Next.js rewrites to keep cookies same-origin
+  baseURL: typeof window !== "undefined" ? window.location.origin : "",
   plugins: [magicLinkClient()],
 });
 
