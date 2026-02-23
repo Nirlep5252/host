@@ -27,7 +27,6 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).unique().notNull(),
   name: varchar("name", { length: 255 }),
-  apiKeyHash: varchar("api_key_hash", { length: 64 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   isActive: boolean("is_active").default(true).notNull(),
@@ -77,6 +76,18 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
 
+export const apiKeys = pgTable("api_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  keyHash: varchar("key_hash", { length: 64 }).notNull(),
+  keyPrefix: varchar("key_prefix", { length: 7 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+});
+
 export const images = pgTable("images", {
   id: varchar("id", { length: 50 }).primaryKey(),
   userId: uuid("user_id")
@@ -114,6 +125,14 @@ export const usersRelations = relations(users, ({ many, one }) => ({
     fields: [users.domainId],
     references: [domains.id],
   }),
+  apiKeys: many(apiKeys),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
 }));
 
 export type Domain = typeof domains.$inferSelect;
@@ -127,3 +146,5 @@ export type NewWaitlistEntry = typeof waitlist.$inferInsert;
 export type Session = typeof session.$inferSelect;
 export type Account = typeof account.$inferSelect;
 export type Verification = typeof verification.$inferSelect;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;

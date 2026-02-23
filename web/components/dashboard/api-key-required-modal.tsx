@@ -13,17 +13,22 @@ interface ApiKeyRequiredModalProps {
 }
 
 export function ApiKeyRequiredModal({ isOpen, onComplete }: ApiKeyRequiredModalProps) {
-  const { regenerateApiKey, apiKey } = useAuth();
+  const { createApiKey, apiKey } = useAuth();
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [keyName, setKeyName] = useState("Default");
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerateKey = async () => {
+    if (!keyName.trim()) {
+      setError("Please enter a name for your API key");
+      return;
+    }
     setIsGenerating(true);
     setError(null);
     try {
-      const newKey = await regenerateApiKey();
+      const newKey = await createApiKey(keyName.trim());
       if (newKey) {
         setGeneratedKey(newKey);
       } else {
@@ -174,6 +179,19 @@ export function ApiKeyRequiredModal({ isOpen, onComplete }: ApiKeyRequiredModalP
                 Welcome to formality.life! To start uploading images, you'll need to generate an API key.
                 This key is used to authenticate your uploads via ShareX or the API.
               </p>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Key Name
+                </label>
+                <input
+                  type="text"
+                  value={keyName}
+                  onChange={(e) => setKeyName(e.target.value)}
+                  placeholder="e.g. MacBook, Desktop, ShareX"
+                  className="w-full rounded-[--radius-md] border border-border-default bg-bg-tertiary px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+                />
+              </div>
 
               <div className="rounded-[--radius-md] border border-accent/20 bg-accent/5 p-4">
                 <div className="flex gap-3">

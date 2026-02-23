@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq, sql, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { Resend } from "resend";
-import { createDb, users, waitlist, domains, images } from "../db";
+import { createDb, users, waitlist, domains, images, apiKeys } from "../db";
 import { adminMiddleware, hashApiKey } from "../middleware/auth";
 import { adminRateLimit } from "../middleware/rate-limit";
 import { CloudflareAPI } from "../lib/cloudflare";
@@ -33,26 +33,32 @@ admin.post("/users", async (c) => {
       return c.json({ error: "User with this email already exists" }, 400);
     }
 
-    const apiKey = `sk_${nanoid(32)}`;
-    const apiKeyHash = await hashApiKey(apiKey);
-
     const result = await db
       .insert(users)
       .values({
         email: body.email,
         name: body.name,
-        apiKeyHash,
       })
       .returning();
 
-    const newUser = result[0];
+    const newUser = result[0]!;
+
+    const apiKey = `sk_${nanoid(32)}`;
+    const keyHash = await hashApiKey(apiKey);
+
+    await db.insert(apiKeys).values({
+      userId: newUser.id,
+      name: "Default",
+      keyHash,
+      keyPrefix: apiKey.slice(0, 7),
+    });
 
     return c.json({
       user: {
-        id: newUser!.id,
-        email: newUser!.email,
-        name: newUser!.name,
-        createdAt: newUser!.createdAt,
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        createdAt: newUser.createdAt,
       },
       apiKey,
     });
@@ -109,7 +115,7 @@ admin.delete("/users/:id", async (c) => {
   }
 });
 
-admin.post("/users/:id/regenerate-key", async (c) => {
+admin.post("/users/:id/create-key", async (c) => {
   const id = c.req.param("id");
 
   try {
@@ -122,9 +128,14 @@ admin.post("/users/:id/regenerate-key", async (c) => {
     }
 
     const apiKey = `sk_${nanoid(32)}`;
-    const apiKeyHash = await hashApiKey(apiKey);
+    const keyHash = await hashApiKey(apiKey);
 
-    await db.update(users).set({ apiKeyHash }).where(eq(users.id, id));
+    await db.insert(apiKeys).values({
+      userId: user.id,
+      name: "Admin-generated",
+      keyHash,
+      keyPrefix: apiKey.slice(0, 7),
+    });
 
     return c.json({
       user: {
@@ -135,8 +146,8 @@ admin.post("/users/:id/regenerate-key", async (c) => {
       apiKey,
     });
   } catch (error) {
-    console.error("Failed to regenerate API key:", error);
-    return c.json({ error: "Failed to regenerate API key" }, 500);
+    console.error("Failed to create API key:", error);
+    return c.json({ error: "Failed to create API key" }, 500);
   }
 });
 
@@ -267,19 +278,25 @@ admin.post("/waitlist/:id/approve", async (c) => {
       return c.json({ error: "User with this email already exists" }, 400);
     }
 
-    const apiKey = `sk_${nanoid(32)}`;
-    const apiKeyHash = await hashApiKey(apiKey);
-
     const result = await db
       .insert(users)
       .values({
         email: entry.email,
         name: entry.name,
-        apiKeyHash,
       })
       .returning();
 
-    const newUser = result[0];
+    const newUser = result[0]!;
+
+    const apiKey = `sk_${nanoid(32)}`;
+    const keyHash = await hashApiKey(apiKey);
+
+    await db.insert(apiKeys).values({
+      userId: newUser.id,
+      name: "Default",
+      keyHash,
+      keyPrefix: apiKey.slice(0, 7),
+    });
 
     try {
       const resend = new Resend(c.env.RESEND_API_KEY);

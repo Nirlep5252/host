@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { useQueryClient } from "@tanstack/react-query";
+import { useAuth, type ApiKeyInfo } from "@/lib/auth-context";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Badge, Input } from "@/components/ui";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+const API_BASE_URL =
+  typeof window !== "undefined" ? window.location.origin : "";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
@@ -23,6 +24,31 @@ function getProgressColor(percent: number): string {
   return "bg-accent";
 }
 
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatRelativeDate(dateStr: string | null): string {
+  if (!dateStr) return "Never";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return formatDate(dateStr);
+}
+
 interface Domain {
   id: string;
   domain: string;
@@ -35,15 +61,33 @@ interface Domain {
   sslStatus?: string;
 }
 
-export default function SettingsPage() {
-  const { apiKey, regenerateApiKey, user } = useAuth();
-  const queryClient = useQueryClient();
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [showKey, setShowKey] = useState(false);
-  const [newKey, setNewKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+async function fetchApiKeys(): Promise<ApiKeyInfo[]> {
+  const response = await fetch(`${API_BASE_URL}/me/api-keys`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to fetch API keys");
+  const data = await response.json();
+  return data.keys;
+}
 
+export default function SettingsPage() {
+  const { createApiKey, revokeApiKey, apiKey, user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // API Keys state
+  const { data: apiKeys = [], isLoading: isLoadingKeys } = useQuery({
+    queryKey: ["api-keys"],
+    queryFn: fetchApiKeys,
+  });
+  const [isCreating, setIsCreating] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+
+  // Domain state
   const [domains, setDomains] = useState<Domain[]>([]);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [isLoadingDomains, setIsLoadingDomains] = useState(true);
@@ -70,10 +114,8 @@ export default function SettingsPage() {
           const data = await response.json();
           let domainList = data.domains || [];
 
-          // Ensure there's always a default domain option
           const hasDefault = domainList.some((d: Domain) => d.isDefault);
           if (!hasDefault && domainList.length === 0) {
-            // Add formality.life as fallback if no domains exist
             domainList = [{ id: "default", domain: "formality.life", isDefault: true }];
           }
 
@@ -81,7 +123,6 @@ export default function SettingsPage() {
         }
       } catch {
         console.error("Failed to fetch domains");
-        // Fallback to default domain on error
         setDomains([{ id: "default", domain: "formality.life", isDefault: true }]);
       } finally {
         setIsLoadingDomains(false);
@@ -94,12 +135,10 @@ export default function SettingsPage() {
     if (user?.domainId) {
       setSelectedDomainId(user.domainId);
     } else if (domains.length > 0) {
-      // User has no domain set, select the default one
       const defaultDomain = domains.find(d => d.isDefault);
       if (defaultDomain) {
         setSelectedDomainId(defaultDomain.id);
       } else {
-        // No default marked, just select the first one
         setSelectedDomainId(domains[0].id);
       }
     }
@@ -115,6 +154,77 @@ export default function SettingsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // API Key handlers
+  const handleCreateKey = async () => {
+    if (!newKeyName.trim()) {
+      setKeyError("Key name is required");
+      return;
+    }
+    setIsCreating(true);
+    setKeyError(null);
+    try {
+      const key = await createApiKey(newKeyName.trim());
+      setNewlyCreatedKey(key);
+      setNewKeyName("");
+      setShowCreateForm(false);
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : "Failed to create key");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleRevokeKey = async (id: string) => {
+    if (!confirm("Are you sure you want to revoke this API key? It will stop working immediately.")) {
+      return;
+    }
+    setDeletingKeyId(id);
+    try {
+      await revokeApiKey(id);
+    } catch {
+      alert("Failed to revoke API key");
+    } finally {
+      setDeletingKeyId(null);
+    }
+  };
+
+  const handleCopyKey = async () => {
+    if (!newlyCreatedKey) return;
+    await navigator.clipboard.writeText(newlyCreatedKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadShareXConfig = () => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+    const config = {
+      Version: "16.0.0",
+      Name: "formality.life",
+      DestinationType: "ImageUploader",
+      RequestMethod: "POST",
+      RequestURL: `${baseUrl}/upload`,
+      Headers: {
+        "X-API-Key": newlyCreatedKey || apiKey,
+      },
+      Body: "MultipartFormData",
+      FileFormName: "file",
+      URL: "{json:url}",
+    };
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "formality-life.sxcu";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Domain handlers
   const handleDomainChange = async (domainId: string) => {
     setIsDropdownOpen(false);
     if (domainId === selectedDomainId) return;
@@ -144,7 +254,6 @@ export default function SettingsPage() {
   const selectedDomainName = selectedDomain?.domain || domains.find(d => d.isDefault)?.domain || "formality.life";
 
   const myDomains = domains.filter(d => d.isOwner);
-  const selectableDomains = domains.filter(d => d.isConfigured || d.isOwner);
 
   const handleAddDomain = async () => {
     if (!newDomainName.trim()) {
@@ -226,11 +335,9 @@ export default function SettingsPage() {
       return { label: "Active", variant: "success" as const };
     }
 
-    // Check specific status values from Cloudflare
     const status = domain.status?.toLowerCase() || "";
     const sslStatus = domain.sslStatus?.toLowerCase() || "";
 
-    // If hostname status is active but SSL is not, show SSL status
     if (status === "active" && sslStatus !== "active") {
       if (sslStatus === "pending_validation") {
         return { label: "SSL Validating", variant: "warning" as const };
@@ -241,12 +348,10 @@ export default function SettingsPage() {
       return { label: "SSL Pending", variant: "warning" as const };
     }
 
-    // If hostname is pending, check why
     if (status === "pending") {
       return { label: "DNS Pending", variant: "warning" as const };
     }
 
-    // Default fallback
     return { label: "Configure DNS", variant: "warning" as const };
   };
 
@@ -265,141 +370,217 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRegenerate = async () => {
-    if (!confirm("Are you sure you want to regenerate your API key? Your old key will stop working immediately.")) {
-      return;
-    }
-
-    setIsRegenerating(true);
-    setError(null);
-
-    try {
-      const key = await regenerateApiKey();
-      setNewKey(key);
-      setShowKey(true);
-    } catch {
-      setError("Failed to regenerate API key. Please try again.");
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
-
-  const handleCopy = async () => {
-    const keyToCopy = newKey || apiKey;
-    if (!keyToCopy) return;
-
-    await navigator.clipboard.writeText(keyToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const maskedKey = apiKey ? `${apiKey.slice(0, 6)}${"•".repeat(20)}${apiKey.slice(-4)}` : "No API key";
-  const displayKey = showKey ? (newKey || apiKey) : maskedKey;
-
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
         <p className="mt-1 text-text-secondary">
-          Manage your account settings and API key
+          Manage your account settings and API keys
         </p>
       </div>
 
+      {/* API Keys Card */}
       <Card className="p-6">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-text-primary">API Key</h2>
-          <p className="mt-1 text-sm text-text-secondary">
-            Use this key to upload images via ShareX or the API
-          </p>
-        </div>
-
-        {newKey && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-4 rounded-[--radius-md] border border-warning bg-warning/10 p-4"
-          >
-            <div className="flex items-start gap-3">
-              <svg className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-              </svg>
-              <div>
-                <p className="font-medium text-warning">Save your API key now</p>
-                <p className="text-sm text-text-secondary mt-1">
-                  This is the only time you&apos;ll see your full API key. Copy it and store it securely.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        <div className="flex items-center gap-3">
-          <div className="flex-1 overflow-hidden rounded-[--radius-md] border border-border-default bg-bg-tertiary px-4 py-3 font-[family-name:var(--font-geist-mono)] text-sm text-text-primary tracking-wide">
-            <span className="block truncate">{displayKey}</span>
-          </div>
-
-          <Button
-            variant="secondary"
-            onClick={handleCopy}
-            disabled={!apiKey && !newKey}
-          >
-            {copied ? (
-              <>
-                <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                Copied
-              </>
-            ) : (
-              <>
-                <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
-                </svg>
-                Copy
-              </>
-            )}
-          </Button>
-
-          {apiKey && !newKey && (
-            <Button
-              variant="ghost"
-              onClick={() => setShowKey(!showKey)}
-            >
-              {showKey ? (
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                </svg>
-              ) : (
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              )}
-            </Button>
-          )}
-        </div>
-
-        {error && (
-          <p className="mt-3 text-sm text-error">{error}</p>
-        )}
-
-        <div className="mt-6 flex items-center justify-between border-t border-border-subtle pt-6">
+        <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-text-primary">Regenerate API Key</p>
-            <p className="text-sm text-text-muted">
-              This will invalidate your current key
+            <h2 className="text-lg font-semibold text-text-primary">API Keys</h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Manage your API keys for uploading images via ShareX or the API
             </p>
           </div>
           <Button
-            variant="destructive"
-            onClick={handleRegenerate}
-            disabled={isRegenerating}
+            variant="secondary"
+            onClick={() => {
+              setShowCreateForm(true);
+              setNewlyCreatedKey(null);
+            }}
+            disabled={apiKeys.length >= 10}
           >
-            {isRegenerating ? "Regenerating..." : "Regenerate Key"}
+            <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Create Key
           </Button>
         </div>
+
+        {/* Newly created key banner */}
+        <AnimatePresence>
+          {newlyCreatedKey && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-4 rounded-[--radius-md] border border-warning bg-warning/10 p-4"
+            >
+              <div className="flex items-start gap-3 mb-3">
+                <svg className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+                <div>
+                  <p className="font-medium text-warning">Save your API key now</p>
+                  <p className="text-sm text-text-secondary mt-1">
+                    This is the only time you&apos;ll see your full API key. Copy it and store it securely.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-[--radius-md] bg-bg-tertiary px-4 py-3 font-[family-name:var(--font-geist-mono)] text-sm text-accent break-all">
+                  {newlyCreatedKey}
+                </code>
+                <Button variant="secondary" onClick={handleCopyKey}>
+                  {copied ? (
+                    <>
+                      <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                      </svg>
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+              <button
+                onClick={handleDownloadShareXConfig}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-[--radius-md] border border-border-default bg-bg-tertiary px-4 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 15V3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Download ShareX Config
+              </button>
+              <button
+                onClick={() => setNewlyCreatedKey(null)}
+                className="mt-2 w-full text-center text-xs text-text-muted hover:text-text-secondary"
+              >
+                Dismiss
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Create key form */}
+        <AnimatePresence>
+          {showCreateForm && !newlyCreatedKey && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4 overflow-hidden"
+            >
+              <div className="rounded-[--radius-md] border border-border-default bg-bg-tertiary p-4">
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Key Name
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                    placeholder="e.g. MacBook, Desktop, ShareX"
+                    className="flex-1 rounded-[--radius-md] border border-border-default bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateKey()}
+                    autoFocus
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={handleCreateKey}
+                    disabled={isCreating || !newKeyName.trim()}
+                  >
+                    {isCreating ? "Creating..." : "Create"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => { setShowCreateForm(false); setKeyError(null); }}>
+                    Cancel
+                  </Button>
+                </div>
+                {keyError && (
+                  <p className="mt-2 text-sm text-error">{keyError}</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Key list */}
+        {isLoadingKeys ? (
+          <div className="flex items-center gap-3 text-text-muted">
+            <div className="h-5 w-5 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+            <span className="text-sm">Loading API keys...</span>
+          </div>
+        ) : apiKeys.length === 0 ? (
+          <div className="rounded-[--radius-md] border border-dashed border-border-default p-8 text-center">
+            <svg className="mx-auto h-10 w-10 text-text-muted mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            <p className="text-text-secondary font-medium">No API keys</p>
+            <p className="text-sm text-text-muted mt-1">
+              Create an API key to start uploading images
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {apiKeys.map((key) => (
+              <div
+                key={key.id}
+                className="flex items-center justify-between rounded-[--radius-md] border border-border-default bg-bg-tertiary px-4 py-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10">
+                    <svg className="h-4 w-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-text-primary truncate">{key.name}</p>
+                      <code className="text-xs text-text-muted font-[family-name:var(--font-geist-mono)]">
+                        {key.keyPrefix}...
+                      </code>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span className="text-xs text-text-muted">
+                        Created {formatDate(key.createdAt)}
+                      </span>
+                      <span className="text-xs text-text-muted">
+                        Last used: {formatRelativeDate(key.lastUsedAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRevokeKey(key.id)}
+                  disabled={deletingKeyId === key.id}
+                >
+                  {deletingKeyId === key.id ? (
+                    <div className="h-4 w-4 rounded-full border-2 border-error/30 border-t-error animate-spin" />
+                  ) : (
+                    <svg className="h-4 w-4 text-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {apiKeys.length >= 10 && (
+          <p className="mt-3 text-xs text-text-muted">
+            Maximum of 10 API keys reached. Delete an existing key to create a new one.
+          </p>
+        )}
       </Card>
 
+      {/* Storage Card */}
       <Card className="p-6">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-text-primary">Storage</h2>
@@ -459,6 +640,7 @@ export default function SettingsPage() {
         )}
       </Card>
 
+      {/* Upload Domain Card */}
       <Card className="p-6">
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-text-primary">Upload Domain</h2>
@@ -610,6 +792,7 @@ export default function SettingsPage() {
         </p>
       </Card>
 
+      {/* Custom Domains Card */}
       <Card className="p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -748,6 +931,7 @@ export default function SettingsPage() {
         })()}
       </Card>
 
+      {/* Add Domain Modal */}
       <AnimatePresence>
         {isAddDomainModalOpen && (
           <motion.div

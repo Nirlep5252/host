@@ -6,7 +6,7 @@ import type {
   AdminCreateUserRequest,
   AdminCreateUserResponse,
   AdminDeleteUserResponse,
-  AdminRegenerateKeyResponse,
+  AdminCreateKeyResponse,
   AdminWaitlistResponse,
   AdminApproveWaitlistResponse,
   AdminRejectWaitlistResponse,
@@ -93,13 +93,13 @@ export function useAdminDeleteUser(adminKey: string) {
   });
 }
 
-export function useAdminRegenerateKey(adminKey: string) {
+export function useAdminCreateKey(adminKey: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (userId: string) => {
-      return adminClient<AdminRegenerateKeyResponse>(
-        `/admin/users/${userId}/regenerate-key`,
+      return adminClient<AdminCreateKeyResponse>(
+        `/admin/users/${userId}/create-key`,
         adminKey,
         { method: "POST" }
       );
