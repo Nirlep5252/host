@@ -14,6 +14,9 @@ export type Bindings = {
   CLOUDFLARE_ZONE_ID: string;
   CLOUDFLARE_API_TOKEN: string;
   CLOUDFLARE_WORKER_NAME?: string;
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+  FRONTEND_URL: string;
 };
 
 export type Variables = {

@@ -16,9 +16,12 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:3000", "https://web.formality.life"],
+    origin: [
+      "http://localhost:3000",
+      "http://host-web.localhost:1355",
+      "https://web.formality.life",
+    ],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "X-API-Key", "X-Admin-Key"],
     exposeHeaders: ["Content-Length"],
     maxAge: 86400,
     credentials: true,

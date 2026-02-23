@@ -13,7 +13,8 @@ import { adminClient } from "./api";
 
 const API_KEY_STORAGE_KEY = "host_api_key";
 const ADMIN_STORAGE_KEY = "host_admin_key";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+const API_BASE_URL =
+  typeof window !== "undefined" ? window.location.origin : "";
 
 export interface User {
   id: string;

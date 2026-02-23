@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port ${PORT:-8787}",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
