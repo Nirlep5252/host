@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useTemporaryFlag } from "@/lib/hooks/use-temporary-state";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 import { modalContent, transition } from "@/lib/motion";
@@ -17,7 +18,7 @@ export function ApiKeyRequiredModal({ isOpen, onComplete }: ApiKeyRequiredModalP
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [keyName, setKeyName] = useState("Default");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { active: copied, activate: markCopied } = useTemporaryFlag(2000);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerateKey = async () => {
@@ -44,8 +45,7 @@ export function ApiKeyRequiredModal({ isOpen, onComplete }: ApiKeyRequiredModalP
   const handleCopyKey = async () => {
     if (!generatedKey) return;
     await navigator.clipboard.writeText(generatedKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    markCopied();
   };
 
   const handleDownloadShareXConfig = () => {
@@ -101,7 +101,7 @@ export function ApiKeyRequiredModal({ isOpen, onComplete }: ApiKeyRequiredModalP
                   <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold text-text-primary">
                     API Key Generated
                   </h2>
-                  <p className="text-sm text-text-muted">Copy your key now - it won't be shown again</p>
+                  <p className="text-sm text-text-muted">Copy your key now - it won&apos;t be shown again</p>
                 </div>
               </div>
 
@@ -136,7 +136,7 @@ export function ApiKeyRequiredModal({ isOpen, onComplete }: ApiKeyRequiredModalP
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <p className="text-sm text-warning">
-                    Save this key securely. You'll need it to upload images via ShareX or the API.
+                    Save this key securely. You&apos;ll need it to upload images via ShareX or the API.
                   </p>
                 </div>
               </div>
@@ -176,7 +176,7 @@ export function ApiKeyRequiredModal({ isOpen, onComplete }: ApiKeyRequiredModalP
               </div>
 
               <p className="text-text-secondary">
-                Welcome to formality.life! To start uploading images, you'll need to generate an API key.
+                Welcome to formality.life! To start uploading images, you&apos;ll need to generate an API key.
                 This key is used to authenticate your uploads via ShareX or the API.
               </p>
 

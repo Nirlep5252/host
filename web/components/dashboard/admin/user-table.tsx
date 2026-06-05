@@ -5,8 +5,21 @@ import { useAuth } from "@/lib/auth-context";
 import { useAdminDeleteUser, useAdminCreateKey, useAdminUpdateUser } from "@/lib/api";
 import type { AdminUser } from "@/lib/api";
 import { Button } from "@/components/ui";
+import { useTemporaryState } from "@/lib/hooks/use-temporary-state";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
+import {
+  ApiKeyResultDialog,
+  formatAdminDate,
+  getAvatarColor,
+  getInitials,
+} from "./admin-ui";
+import {
+  formatBytes,
+  getStorageProgressColor,
+  getStorageUsageTextColor,
+  getUsagePercent,
+} from "@/lib/format";
 
 const DEFAULT_STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
 
@@ -30,60 +43,8 @@ type ActionState = {
   currentLimit?: number | null;
 };
 
-function getInitials(email: string, name?: string | null): string {
-  if (name) {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  }
-  return email.slice(0, 2).toUpperCase();
-}
-
-function getAvatarColor(email: string): string {
-  const colors = [
-    "bg-violet-500/20 text-violet-400",
-    "bg-blue-500/20 text-blue-400",
-    "bg-cyan-500/20 text-cyan-400",
-    "bg-emerald-500/20 text-emerald-400",
-    "bg-amber-500/20 text-amber-400",
-    "bg-rose-500/20 text-rose-400",
-    "bg-pink-500/20 text-pink-400",
-    "bg-indigo-500/20 text-indigo-400",
-  ];
-  const index = email.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[index % colors.length];
-}
-
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes <= 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
 function getStorageLimit(storageLimitBytes: number | null): number {
   return storageLimitBytes ?? DEFAULT_STORAGE_LIMIT_BYTES;
-}
-
-function getUsagePercent(used: number, limit: number): number {
-  if (limit === 0) return 0;
-  return Math.min(Math.round((used / limit) * 100), 100);
-}
-
-function getUsageColor(percent: number): string {
-  if (percent >= 90) return "text-error";
-  if (percent >= 75) return "text-warning";
-  return "text-text-muted";
-}
-
-function getProgressColor(percent: number): string {
-  if (percent >= 90) return "bg-error";
-  if (percent >= 75) return "bg-warning";
-  return "bg-accent";
 }
 
 export function UserTable({ users, onCopyKey }: UserTableProps) {
@@ -91,21 +52,20 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
   const deleteMutation = useAdminDeleteUser(adminKey || "");
   const createKeyMutation = useAdminCreateKey(adminKey || "");
   const updateUserMutation = useAdminUpdateUser(adminKey || "");
-  const [actionState, setActionState] = useState<ActionState | null>(null);
-  const [copied, setCopied] = useState(false);
+  const {
+    value: actionState,
+    setValue: setActionState,
+    setTemporaryValue: setTemporaryActionState,
+    reset: resetActionState,
+  } = useTemporaryState<ActionState | null>(null, 3000);
   const [customStorageInput, setCustomStorageInput] = useState("");
 
   const handleDelete = async (userId: string) => {
     if (actionState?.type === "delete" && actionState.userId === userId) {
       await deleteMutation.mutateAsync(userId);
-      setActionState(null);
+      resetActionState();
     } else {
-      setActionState({ type: "delete", userId });
-      setTimeout(() => {
-        setActionState((current) =>
-          current?.type === "delete" && current.userId === userId ? null : current
-        );
-      }, 3000);
+      setTemporaryActionState({ type: "delete", userId });
     }
   };
 
@@ -114,25 +74,12 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
       const result = await createKeyMutation.mutateAsync(userId);
       setActionState({ type: "key-result", userId, key: result.apiKey });
     } else {
-      setActionState({ type: "create-key", userId });
-      setTimeout(() => {
-        setActionState((current) =>
-          current?.type === "create-key" && current.userId === userId ? null : current
-        );
-      }, 3000);
+      setTemporaryActionState({ type: "create-key", userId });
     }
   };
 
-  const handleCopyKey = async (key: string) => {
-    await navigator.clipboard.writeText(key);
-    setCopied(true);
-    onCopyKey?.(key);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const closeKeyResult = () => {
-    setActionState(null);
-    setCopied(false);
+    resetActionState();
   };
 
   const openStorageEdit = (user: AdminUser) => {
@@ -150,7 +97,7 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
       userId: actionState.userId,
       storageLimitBytes: bytes,
     });
-    setActionState(null);
+    resetActionState();
     setCustomStorageInput("");
   };
 
@@ -162,22 +109,8 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
   };
 
   const closeStorageEdit = () => {
-    setActionState(null);
+    resetActionState();
     setCustomStorageInput("");
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return "Today";
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
   };
 
   return (
@@ -225,7 +158,7 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
                     className="flex items-center gap-1 text-text-muted transition-colors hover:text-accent"
                     title="Edit storage limit"
                   >
-                    <span className={getUsageColor(getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes)))}>
+                    <span className={getStorageUsageTextColor(getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes)))}>
                       {formatBytes(user.storageBytes)} / {formatBytes(getStorageLimit(user.storageLimitBytes))}
                     </span>
                     <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,7 +168,7 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
                 </div>
                 <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-bg-tertiary">
                   <div
-                    className={`h-full rounded-full transition-all ${getProgressColor(getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes)))}`}
+                    className={`h-full rounded-full transition-all ${getStorageProgressColor(getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes)))}`}
                     style={{ width: `${getUsagePercent(user.storageBytes, getStorageLimit(user.storageLimitBytes))}%` }}
                   />
                 </div>
@@ -244,7 +177,7 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
 
             {/* Footer: Date + Actions */}
             <div className="flex items-center justify-between">
-              <span className="text-xs text-text-muted">Joined {formatDate(user.createdAt)}</span>
+              <span className="text-xs text-text-muted">Joined {formatAdminDate(user.createdAt)}</span>
 
               <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                 {actionState?.type === "create-key" && actionState.userId === user.id ? (
@@ -294,70 +227,14 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
         ))}
       </div>
 
-      {/* Key Result Modal */}
-      <AnimatePresence>
-        {actionState?.type === "key-result" && actionState.key && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-primary/80 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-[--radius-lg] border border-border-default bg-bg-secondary p-6 shadow-2xl"
-            >
-              <div className="space-y-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <svg className="h-5 w-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-text-primary">
-                      Key Created
-                    </h2>
-                    <p className="text-sm text-text-muted">Copy the new key now</p>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium uppercase tracking-wider text-text-muted">
-                    New API Key
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 rounded-[--radius-md] bg-bg-tertiary px-3 py-2.5 font-mono text-sm text-accent break-all">
-                      {actionState.key}
-                    </code>
-                    <button
-                      onClick={() => handleCopyKey(actionState.key!)}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[--radius-md] bg-bg-tertiary text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                    >
-                      {copied ? (
-                        <svg className="h-4 w-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-[--radius-md] border border-warning/20 bg-warning/5 px-3 py-2.5">
-                  <p className="text-xs text-warning">
-                    This key will only be shown once. Share it with the user now.
-                  </p>
-                </div>
-
-                <Button variant="primary" className="w-full" onClick={closeKeyResult}>
-                  Done
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ApiKeyResultDialog
+        apiKey={actionState?.type === "key-result" ? actionState.key ?? null : null}
+        title="Key Created"
+        subtitle="Copy the new key now"
+        warning="This key will only be shown once. Share it with the user now."
+        onCopied={onCopyKey}
+        onClose={closeKeyResult}
+      />
 
       {/* Storage Edit Modal */}
       <AnimatePresence>

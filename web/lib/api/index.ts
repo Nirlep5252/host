@@ -18,6 +18,8 @@ export type {
   AdminApproveWaitlistResponse,
   AdminRejectWaitlistResponse,
   AdminDeleteWaitlistResponse,
+  AdminDomain,
+  AdminDomainsResponse,
 } from "./types";
 export { userKeys, imageKeys, userQuery, imagesQuery } from "./queries";
 export { useUploadImage, useUpdateImage, useDeleteImage } from "./mutations";

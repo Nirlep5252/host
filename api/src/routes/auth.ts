@@ -6,6 +6,22 @@ import type { Bindings, Variables } from "../types";
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+type GithubRedirect = {
+  url: string;
+  redirect: boolean;
+};
+
+function isGithubRedirect(value: unknown): value is GithubRedirect {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "url" in value &&
+    typeof value.url === "string" &&
+    "redirect" in value &&
+    typeof value.redirect === "boolean"
+  );
+}
+
 auth.get("/github", async (c) => {
   const callbackURL = c.req.query("callbackURL") || "/dashboard";
   const db = createDb(c.env.DATABASE_URL);
@@ -19,9 +35,13 @@ auth.get("/github", async (c) => {
 
   const response = await authInstance.handler(request);
 
-  // better-auth returns JSON with { url, redirect } — extract and redirect
+  // better-auth returns JSON with { url, redirect }.
   // Forward ALL Set-Cookie headers (state + cross-domain cookies)
-  const data = await response.json() as { url: string; redirect: boolean };
+  const data = await response.json();
+  if (!isGithubRedirect(data)) {
+    return c.json({ error: "Invalid GitHub redirect response" }, 502);
+  }
+
   const redirectResponse = new Response(null, {
     status: 302,
     headers: { Location: data.url },

@@ -1,10 +1,17 @@
 import { Hono } from "hono";
-import { eq, and, isNull, count, or, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { eq, and, isNull, count, sql } from "drizzle-orm";
 import { createDb, images, users, domains, apiKeys, type User } from "../db";
-import { verifyApiKey, hashApiKey } from "../middleware/auth";
+import { verifyApiKey } from "../middleware/auth";
 import { sessionMiddleware, requireSession } from "../middleware/session";
 import { CloudflareAPI } from "../lib/cloudflare";
+import { createApiKeyForUser } from "../lib/api-keys";
+import {
+  getAvailableDomainsForUser,
+  getPreferredDomainName,
+  normalizeDomain,
+  validateDomainSelection,
+  type DomainVisibility,
+} from "../lib/domains";
 import { getEffectiveStorageLimit } from "../lib/storage";
 import type { Bindings, Variables } from "../types";
 
@@ -61,21 +68,7 @@ me.get("/", async (c) => {
     const storageBytes = Number(storageResult?.storageBytes || 0);
     const storageLimitBytes = getEffectiveStorageLimit(user.storageLimitBytes);
 
-    let domain: string | null = null;
-    if (user.domainId) {
-      const [userDomain] = await db
-        .select({ domain: domains.domain })
-        .from(domains)
-        .where(eq(domains.id, user.domainId));
-      domain = userDomain?.domain ?? null;
-    }
-    if (!domain) {
-      const [defaultDomain] = await db
-        .select({ domain: domains.domain })
-        .from(domains)
-        .where(eq(domains.isDefault, true));
-      domain = defaultDomain?.domain ?? null;
-    }
+    const domain = await getPreferredDomainName(db, user.id);
 
     const [keyCount] = await db
       .select({ count: count() })
@@ -157,16 +150,7 @@ me.post("/api-keys", requireSession, async (c) => {
       return c.json({ error: `You can have at most ${MAX_API_KEYS} API keys` }, 400);
     }
 
-    const newKey = `sk_${nanoid(32)}`;
-    const hash = await hashApiKey(newKey);
-    const prefix = newKey.slice(0, 7);
-
-    await db.insert(apiKeys).values({
-      userId: sessionUser.id,
-      name,
-      keyHash: hash,
-      keyPrefix: prefix,
-    });
+    const newKey = await createApiKeyForUser(db, sessionUser.id, name);
 
     return c.json({
       apiKey: newKey,
@@ -232,98 +216,7 @@ me.get("/domains", async (c) => {
   try {
     const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN);
 
-    // Fetch domains that user can potentially use:
-    // 1. Admin domains (ownerId is null) that are active
-    // 2. User's own domains (regardless of visibility/approval)
-    // 3. Other users' public domains that are approved and active
-    const activeDomains = await db
-      .select({
-        id: domains.id,
-        domain: domains.domain,
-        isDefault: domains.isDefault,
-        isWorkerDomain: domains.isWorkerDomain,
-        cloudflareHostnameId: domains.cloudflareHostnameId,
-        ownerId: domains.ownerId,
-        visibility: domains.visibility,
-        isApproved: domains.isApproved,
-      })
-      .from(domains)
-      .where(
-        and(
-          eq(domains.isActive, true),
-          or(
-            isNull(domains.ownerId),
-            eq(domains.ownerId, user.id),
-            and(
-              eq(domains.visibility, "public"),
-              eq(domains.isApproved, true)
-            )
-          )
-        )
-      );
-
-    // Filter to only fully configured domains (or user's own unconfigured domains for status display)
-    const configuredDomains = await Promise.all(
-      activeDomains.map(async (domain) => {
-        const isOwner = domain.ownerId === user.id;
-
-        // Default domains and worker domains don't need Cloudflare for SaaS verification
-        if (domain.isDefault || domain.isWorkerDomain) {
-          return {
-            id: domain.id,
-            domain: domain.domain,
-            isDefault: domain.isDefault,
-            isOwner,
-            visibility: domain.visibility,
-            isApproved: domain.isApproved,
-            isConfigured: true,
-            status: "active",
-            sslStatus: "active",
-          };
-        }
-
-        // Custom domains need to be checked in Cloudflare
-        if (!domain.cloudflareHostnameId) {
-          // Only include unconfigured domains if user owns them (so they can see status)
-          if (isOwner) {
-            return {
-              id: domain.id,
-              domain: domain.domain,
-              isDefault: domain.isDefault,
-              isOwner,
-              visibility: domain.visibility,
-              isApproved: domain.isApproved,
-              isConfigured: false,
-              status: "pending",
-              sslStatus: "pending",
-            };
-          }
-          return null;
-        }
-
-        const status = await cf.checkHostnameStatus(domain.domain);
-
-        // Include domain if it's configured OR if user owns it (so they can see pending status)
-        if (status.isConfigured || isOwner) {
-          return {
-            id: domain.id,
-            domain: domain.domain,
-            isDefault: domain.isDefault,
-            isOwner,
-            visibility: domain.visibility,
-            isApproved: domain.isApproved,
-            isConfigured: status.isConfigured,
-            status: status.status,
-            sslStatus: status.sslStatus,
-          };
-        }
-
-        return null;
-      })
-    );
-
-    // Filter out null values
-    const availableDomains = configuredDomains.filter((d): d is NonNullable<typeof d> => d !== null);
+    const availableDomains = await getAvailableDomainsForUser(db, cf, user.id);
 
     return c.json({ domains: availableDomains });
   } catch (error) {
@@ -344,37 +237,14 @@ me.patch("/domain", requireSession, async (c) => {
     const body = await c.req.json<{ domainId: string | null }>();
 
     if (body.domainId !== null) {
-      const [domain] = await db
-        .select()
-        .from(domains)
-        .where(and(eq(domains.id, body.domainId), eq(domains.isActive, true)));
-
-      if (!domain) {
-        return c.json({ error: "Domain not found or inactive" }, 400);
-      }
-
-      // Check if user can use this domain:
-      // 1. Admin domain (ownerId is null)
-      // 2. User's own domain
-      // 3. Public + approved domain from another user
-      const isAdminDomain = domain.ownerId === null;
-      const isOwnDomain = domain.ownerId === sessionUser.id;
-      const isPublicApproved = domain.visibility === "public" && domain.isApproved;
-
-      if (!isAdminDomain && !isOwnDomain && !isPublicApproved) {
-        return c.json({ error: "You don't have access to this domain" }, 403);
-      }
-
-      // Verify domain is fully configured (default domains and worker domains skip this check)
-      if (!domain.isDefault && !domain.isWorkerDomain) {
-        if (!domain.cloudflareHostnameId) {
-          return c.json({ error: "Domain is not fully configured" }, 400);
-        }
-
-        const status = await cf.checkHostnameStatus(domain.domain);
-        if (!status.isConfigured) {
-          return c.json({ error: "Domain is not fully configured. Please wait for SSL certificate to be issued." }, 400);
-        }
+      const validation = await validateDomainSelection(
+        db,
+        cf,
+        sessionUser.id,
+        body.domainId
+      );
+      if (!validation.ok) {
+        return c.json({ error: validation.error }, validation.status);
       }
     }
 
@@ -399,7 +269,10 @@ me.post("/domains", requireSession, async (c) => {
   try {
     const db = createDb(c.env.DATABASE_URL);
     const cf = new CloudflareAPI(c.env.CLOUDFLARE_ZONE_ID, c.env.CLOUDFLARE_API_TOKEN, c.env.CLOUDFLARE_WORKER_NAME);
-    const body = await c.req.json<{ domain: string; visibility: "private" | "public" }>();
+    const body = await c.req.json<{
+      domain: string;
+      visibility: DomainVisibility;
+    }>();
 
     if (!body.domain || typeof body.domain !== "string") {
       return c.json({ error: "Domain is required" }, 400);
@@ -411,7 +284,7 @@ me.post("/domains", requireSession, async (c) => {
 
     // Validate domain format
     const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
-    const cleanDomain = body.domain.toLowerCase().trim();
+    const cleanDomain = normalizeDomain(body.domain);
     if (!domainRegex.test(cleanDomain)) {
       return c.json({ error: "Invalid domain format" }, 400);
     }

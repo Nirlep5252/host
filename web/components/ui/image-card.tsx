@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Thumbnail URLs may point at arbitrary user upload domains, so this generic card should not require Next Image configuration. */
+
 import { Badge } from "./badge";
 
 export interface ImageCardProps {

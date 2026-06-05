@@ -1,19 +1,12 @@
 import { createMiddleware } from "hono/factory";
 import { eq, and } from "drizzle-orm";
 import { createDb, users, apiKeys, type User } from "../db";
+import { hashApiKey } from "../lib/api-keys";
 import type { Bindings } from "../types";
 
 type AuthVariables = {
   user: User;
 };
-
-export async function hashApiKey(apiKey: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(apiKey);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 export async function verifyApiKey(
   db: ReturnType<typeof createDb>,

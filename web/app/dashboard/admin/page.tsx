@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@tanstack/react-query";
 import { adminUsersQuery, adminWaitlistQuery } from "@/lib/api";
+import type { AdminUser, WaitlistEntry } from "@/lib/api";
 import { useToast, Button } from "@/components/ui";
 import { UserTable } from "@/components/dashboard/admin/user-table";
 import { WaitlistTable } from "@/components/dashboard/admin/waitlist-table";
@@ -12,6 +13,9 @@ import * as motion from "motion/react-client";
 import { fadeInUp, fadeIn, transition } from "@/lib/motion";
 
 type Tab = "users" | "waitlist";
+
+const EMPTY_USERS: AdminUser[] = [];
+const EMPTY_WAITLIST: WaitlistEntry[] = [];
 
 export default function AdminPage() {
   const { adminKey, clearAdminKey } = useAuth();
@@ -33,33 +37,34 @@ export default function AdminPage() {
     toast("API key copied to clipboard");
   };
 
+  const users = usersData?.users ?? EMPTY_USERS;
+  const waitlistEntries = waitlistData?.entries ?? EMPTY_WAITLIST;
+
   const filteredUsers = useMemo(() => {
-    if (!usersData?.users) return [];
-    if (!searchQuery.trim()) return usersData.users;
+    if (!searchQuery.trim()) return users;
 
     const query = searchQuery.toLowerCase();
-    return usersData.users.filter(
+    return users.filter(
       (user) =>
         user.email.toLowerCase().includes(query) ||
         user.name?.toLowerCase().includes(query)
     );
-  }, [usersData?.users, searchQuery]);
+  }, [users, searchQuery]);
 
   const filteredWaitlist = useMemo(() => {
-    if (!waitlistData?.entries) return [];
-    if (!searchQuery.trim()) return waitlistData.entries;
+    if (!searchQuery.trim()) return waitlistEntries;
 
     const query = searchQuery.toLowerCase();
-    return waitlistData.entries.filter(
+    return waitlistEntries.filter(
       (entry) =>
         entry.email.toLowerCase().includes(query) ||
         entry.name?.toLowerCase().includes(query) ||
         entry.reason?.toLowerCase().includes(query)
     );
-  }, [waitlistData?.entries, searchQuery]);
+  }, [waitlistEntries, searchQuery]);
 
-  const totalUsers = usersData?.users.length ?? 0;
-  const activeUsers = usersData?.users.filter((u) => u.isActive).length ?? 0;
+  const totalUsers = users.length;
+  const activeUsers = users.filter((user) => user.isActive).length;
 
   const isLoading = activeTab === "users" ? usersLoading : waitlistLoading;
   const error = activeTab === "users" ? usersError : waitlistError;
@@ -215,7 +220,7 @@ export default function AdminPage() {
       {/* Search */}
       {!isLoading && !error && (
         (activeTab === "users" && totalUsers > 0) ||
-        (activeTab === "waitlist" && (waitlistData?.entries.length ?? 0) > 0)
+        (activeTab === "waitlist" && waitlistEntries.length > 0)
       ) && (
         <motion.div
           initial={fadeInUp.initial}
@@ -289,7 +294,7 @@ export default function AdminPage() {
           <p className="mt-1 text-sm text-text-muted">Check your admin key and try again</p>
         </motion.div>
       ) : activeTab === "users" ? (
-        usersData?.users.length === 0 ? (
+        users.length === 0 ? (
           <motion.div
             initial={fadeInUp.initial}
             animate={fadeInUp.animate}
@@ -331,7 +336,7 @@ export default function AdminPage() {
           <UserTable users={filteredUsers} onCopyKey={handleCopyKey} />
         )
       ) : (
-        waitlistData?.entries.length === 0 ? (
+        waitlistEntries.length === 0 ? (
           <motion.div
             initial={fadeInUp.initial}
             animate={fadeInUp.animate}

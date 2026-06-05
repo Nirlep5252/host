@@ -3,9 +3,8 @@
 import {
   createContext,
   useContext,
-  useState,
-  useEffect,
   useCallback,
+  useSyncExternalStore,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, signOut as betterAuthSignOut } from "./auth-client";
@@ -13,6 +12,7 @@ import { adminClient } from "./api";
 
 const API_KEY_STORAGE_KEY = "host_api_key";
 const ADMIN_STORAGE_KEY = "host_admin_key";
+const AUTH_STORAGE_EVENT = "formality-auth-storage";
 const API_BASE_URL =
   typeof window !== "undefined" ? window.location.origin : "";
 
@@ -55,6 +55,37 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function readStorageKey(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(key);
+}
+
+function subscribeToAuthStorage(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(AUTH_STORAGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(AUTH_STORAGE_EVENT, onStoreChange);
+  };
+}
+
+function notifyAuthStorageChange() {
+  window.dispatchEvent(new Event(AUTH_STORAGE_EVENT));
+}
+
+function setStorageKey(key: string, value: string) {
+  localStorage.setItem(key, value);
+  notifyAuthStorageChange();
+}
+
+function removeStorageKeys(...keys: string[]) {
+  keys.forEach((key) => localStorage.removeItem(key));
+  notifyAuthStorageChange();
+}
+
 async function fetchUserDetails(): Promise<User> {
   const response = await fetch(`${API_BASE_URL}/me`, {
     credentials: "include",
@@ -66,9 +97,16 @@ async function fetchUserDetails(): Promise<User> {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [apiKey, setApiKeyState] = useState<string | null>(null);
-  const [adminKey, setAdminKeyState] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const apiKey = useSyncExternalStore(
+    subscribeToAuthStorage,
+    () => readStorageKey(API_KEY_STORAGE_KEY),
+    () => null
+  );
+  const adminKey = useSyncExternalStore(
+    subscribeToAuthStorage,
+    () => readStorageKey(ADMIN_STORAGE_KEY),
+    () => null
+  );
   const queryClient = useQueryClient();
 
   const { data: session, isPending: isSessionLoading } = useSession();
@@ -79,18 +117,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     enabled: !!session?.user,
     retry: false,
   });
-
-  useEffect(() => {
-    const storedApiKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-    const storedAdminKey = localStorage.getItem(ADMIN_STORAGE_KEY);
-    if (storedApiKey) {
-      setApiKeyState(storedApiKey);
-    }
-    if (storedAdminKey) {
-      setAdminKeyState(storedAdminKey);
-    }
-    setIsInitialized(true);
-  }, []);
 
   const user: User | null = userDetails || (session?.user
     ? {
@@ -103,10 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     : null);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    localStorage.removeItem(ADMIN_STORAGE_KEY);
-    setApiKeyState(null);
-    setAdminKeyState(null);
+    removeStorageKeys(API_KEY_STORAGE_KEY, ADMIN_STORAGE_KEY);
     queryClient.clear();
     await betterAuthSignOut();
   }, [queryClient]);
@@ -114,16 +137,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setAdminKey = useCallback(async (newAdminKey: string) => {
     try {
       await adminClient("/admin/users", newAdminKey);
-      localStorage.setItem(ADMIN_STORAGE_KEY, newAdminKey);
-      setAdminKeyState(newAdminKey);
+      setStorageKey(ADMIN_STORAGE_KEY, newAdminKey);
     } catch {
       throw new Error("Invalid admin key");
     }
   }, []);
 
   const clearAdminKey = useCallback(() => {
-    localStorage.removeItem(ADMIN_STORAGE_KEY);
-    setAdminKeyState(null);
+    removeStorageKeys(ADMIN_STORAGE_KEY);
     queryClient.invalidateQueries({ queryKey: ["admin"] });
   }, [queryClient]);
 
@@ -143,8 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = await response.json();
     const newKey = data.apiKey;
 
-    localStorage.setItem(API_KEY_STORAGE_KEY, newKey);
-    setApiKeyState(newKey);
+    setStorageKey(API_KEY_STORAGE_KEY, newKey);
     queryClient.invalidateQueries({ queryKey: ["user-details"] });
     queryClient.invalidateQueries({ queryKey: ["api-keys"] });
 
@@ -166,11 +186,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const setApiKey = useCallback((key: string) => {
-    localStorage.setItem(API_KEY_STORAGE_KEY, key);
-    setApiKeyState(key);
+    setStorageKey(API_KEY_STORAGE_KEY, key);
   }, []);
 
-  const isLoading = !isInitialized || isSessionLoading || (!!session?.user && isUserDetailsLoading);
+  const isLoading = isSessionLoading || (!!session?.user && isUserDetailsLoading);
   const isAuthenticated = !!session?.user;
   const isAdmin = user?.isAdmin ?? false;
 

@@ -14,19 +14,14 @@ export default function DashboardLayout({
 }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [dismissedApiKeyPromptForUser, setDismissedApiKeyPromptForUser] =
+    useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push("/login");
     }
   }, [isLoading, isAuthenticated, router]);
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && user && (user.apiKeyCount ?? 0) === 0) {
-      setShowApiKeyModal(true);
-    }
-  }, [isLoading, isAuthenticated, user]);
 
   if (isLoading) {
     return (
@@ -43,6 +38,10 @@ export default function DashboardLayout({
     return null;
   }
 
+  const requiresApiKey = (user?.apiKeyCount ?? 0) === 0;
+  const showApiKeyModal =
+    !!user && requiresApiKey && dismissedApiKeyPromptForUser !== user.id;
+
   return (
     <div className="min-h-screen bg-bg-primary">
       <Sidebar />
@@ -52,7 +51,7 @@ export default function DashboardLayout({
       </div>
       <ApiKeyRequiredModal
         isOpen={showApiKeyModal}
-        onComplete={() => setShowApiKeyModal(false)}
+        onComplete={() => setDismissedApiKeyPromptForUser(user?.id ?? null)}
       />
     </div>
   );

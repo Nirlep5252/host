@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { nanoid } from "nanoid";
 import { eq, sql, isNull } from "drizzle-orm";
 import { uploadFile, deleteFile } from "../storage";
-import { createDb, images, domains, users } from "../db";
+import { createDb, images, users } from "../db";
 import { authMiddleware } from "../middleware/auth";
 import { uploadRateLimit } from "../middleware/rate-limit";
+import { domainFromBaseUrl, getPreferredDomainName } from "../lib/domains";
 import { getEffectiveStorageLimit } from "../lib/storage";
 import type { Bindings, Variables } from "../types";
 
@@ -20,6 +21,8 @@ const ALLOWED_MIME_TYPES = [
   "image/svg+xml", // WARNING: SVG files can contain XSS payloads. Consider sanitization if enabling.
 ] as const;
 
+const ALLOWED_MIME_TYPE_SET = new Set<string>(ALLOWED_MIME_TYPES);
+
 const ALLOWED_EXTENSIONS = [
   ".jpg",
   ".jpeg",
@@ -28,6 +31,16 @@ const ALLOWED_EXTENSIONS = [
   ".webp",
   ".svg",
 ] as const;
+
+const ALLOWED_EXTENSION_SET = new Set<string>(ALLOWED_EXTENSIONS);
+
+const MIME_TO_EXTENSIONS: Record<string, readonly string[]> = {
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/gif": [".gif"],
+  "image/webp": [".webp"],
+  "image/svg+xml": [".svg"],
+};
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -44,7 +57,7 @@ const validateFile = (file: File): { valid: true } | { valid: false; error: stri
     };
   }
 
-  if (!ALLOWED_MIME_TYPES.includes(file.type as any)) {
+  if (!ALLOWED_MIME_TYPE_SET.has(file.type)) {
     return {
       valid: false,
       error: `Invalid file type. Allowed types: ${ALLOWED_MIME_TYPES.join(", ")}`,
@@ -52,22 +65,14 @@ const validateFile = (file: File): { valid: true } | { valid: false; error: stri
   }
 
   const ext = getExtension(file.name);
-  if (!ext || !ALLOWED_EXTENSIONS.includes(ext as any)) {
+  if (!ext || !ALLOWED_EXTENSION_SET.has(ext)) {
     return {
       valid: false,
       error: `Invalid file extension. Allowed extensions: ${ALLOWED_EXTENSIONS.join(", ")}`,
     };
   }
 
-  const mimeToExtMap: Record<string, string[]> = {
-    "image/jpeg": [".jpg", ".jpeg"],
-    "image/png": [".png"],
-    "image/gif": [".gif"],
-    "image/webp": [".webp"],
-    "image/svg+xml": [".svg"],
-  };
-
-  const expectedExts = mimeToExtMap[file.type];
+  const expectedExts = MIME_TO_EXTENSIONS[file.type];
   if (expectedExts && !expectedExts.includes(ext)) {
     return {
       valid: false,
@@ -133,28 +138,11 @@ upload.post("/", authMiddleware, async (c) => {
 
     await uploadFile(c.env.R2, key, buffer, file.type);
 
-    let userDomain: string | null = null;
-    const [freshUser] = await db
-      .select({ domainId: users.domainId })
-      .from(users)
-      .where(eq(users.id, user.id));
-
-    if (freshUser?.domainId) {
-      const [domainRecord] = await db
-        .select({ domain: domains.domain })
-        .from(domains)
-        .where(eq(domains.id, freshUser.domainId));
-      userDomain = domainRecord?.domain ?? null;
-    }
-    if (!userDomain) {
-      const [defaultDomain] = await db
-        .select({ domain: domains.domain })
-        .from(domains)
-        .where(eq(domains.isDefault, true));
-      userDomain = defaultDomain?.domain ?? null;
-    }
-
-    const imageDomain = userDomain || c.env.BASE_URL?.replace(/^https?:\/\//, "") || "formality.life";
+    const imageDomain = await getPreferredDomainName(
+      db,
+      user.id,
+      domainFromBaseUrl(c.env.BASE_URL)
+    );
 
     try {
       await db.insert(images).values({

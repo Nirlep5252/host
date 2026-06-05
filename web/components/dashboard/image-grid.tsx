@@ -10,6 +10,8 @@ import type { Image } from "@/lib/api";
 import { ImageLightbox } from "./image-lightbox";
 import { FallbackImage } from "@/components/ui";
 import { useMasonryOrder } from "@/lib/hooks/use-masonry-order";
+import { useTemporaryState } from "@/lib/hooks/use-temporary-state";
+import { formatBytes } from "@/lib/format";
 
 const DEFAULT_DOMAIN = "formality.life";
 
@@ -22,14 +24,6 @@ function buildFallbackUrl(domain: string, imageId: string, originalUrl: string):
     fallbackUrl = `${fallbackUrl}?token=${token}`;
   }
   return fallbackUrl;
-}
-
-function formatBytes(bytes: number | null): string {
-  if (!bytes) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
 interface ImageGridProps {
@@ -172,7 +166,11 @@ function ImageCard({
 
 export function ImageGrid({ onCopySuccess }: ImageGridProps) {
   const { apiKey } = useAuth();
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const {
+    value: deleteConfirm,
+    setTemporaryValue: setTemporaryDeleteConfirm,
+    reset: clearDeleteConfirm,
+  } = useTemporaryState<string | null>(null, 3000);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [fallbackImages, setFallbackImages] = useState<Set<string>>(new Set());
   const { reorderItems } = useMasonryOrder();
@@ -237,10 +235,9 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
         }
       }
       await deleteMutation.mutateAsync(id);
-      setDeleteConfirm(null);
+      clearDeleteConfirm();
     } else {
-      setDeleteConfirm(id);
-      setTimeout(() => setDeleteConfirm(null), 3000);
+      setTemporaryDeleteConfirm(id);
     }
   };
 

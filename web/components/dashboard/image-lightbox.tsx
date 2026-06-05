@@ -5,6 +5,7 @@ import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 import type { Image } from "@/lib/api";
 import { Button } from "@/components/ui";
+import { formatBytes } from "@/lib/format";
 
 const DEFAULT_DOMAIN = "formality.life";
 
@@ -29,14 +30,6 @@ interface ImageLightboxProps {
   onDelete: (id: string) => void;
   isUpdating: boolean;
   getImageUrl: (image: Image) => string;
-}
-
-function formatBytes(bytes: number | null): string {
-  if (!bytes) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
 export function ImageLightbox({

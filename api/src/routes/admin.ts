@@ -1,11 +1,19 @@
 import { Hono } from "hono";
 import { eq, sql, desc } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { Resend } from "resend";
-import { createDb, users, waitlist, domains, images, apiKeys } from "../db";
-import { adminMiddleware, hashApiKey } from "../middleware/auth";
+import { createDb, users, waitlist, domains, images } from "../db";
+import { adminMiddleware } from "../middleware/auth";
 import { adminRateLimit } from "../middleware/rate-limit";
 import { CloudflareAPI } from "../lib/cloudflare";
+import { createApiKeyForUser } from "../lib/api-keys";
+import { normalizeDomain, resolveDomainStatus } from "../lib/domains";
+import { welcomeEmailHtml } from "../lib/emails";
+import { createUserWithApiKey, findUserByEmail } from "../lib/users";
+import {
+  getPendingWaitlistEntry,
+  getWaitlistStats,
+  isWaitlistStatus,
+} from "../lib/waitlist";
 import type { Bindings } from "../types";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,43 +32,21 @@ admin.post("/users", async (c) => {
       return c.json({ error: "Email is required" }, 400);
     }
 
-    const [existing] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, body.email));
+    const existing = await findUserByEmail(db, body.email);
 
     if (existing) {
       return c.json({ error: "User with this email already exists" }, 400);
     }
 
-    const result = await db
-      .insert(users)
-      .values({
-        email: body.email,
-        name: body.name,
-      })
-      .returning();
-
-    const newUser = result[0]!;
-
-    const apiKey = `sk_${nanoid(32)}`;
-    const keyHash = await hashApiKey(apiKey);
-
-    await db.insert(apiKeys).values({
-      userId: newUser.id,
-      name: "Default",
-      keyHash,
-      keyPrefix: apiKey.slice(0, 7),
+    const result = await createUserWithApiKey(db, {
+      email: body.email,
+      name: body.name,
+      keyName: "Default",
     });
 
     return c.json({
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        createdAt: newUser.createdAt,
-      },
-      apiKey,
+      user: result.user,
+      apiKey: result.apiKey,
     });
   } catch (error) {
     console.error("Failed to create user:", error);
@@ -127,15 +113,7 @@ admin.post("/users/:id/create-key", async (c) => {
       return c.json({ error: "User not found" }, 404);
     }
 
-    const apiKey = `sk_${nanoid(32)}`;
-    const keyHash = await hashApiKey(apiKey);
-
-    await db.insert(apiKeys).values({
-      userId: user.id,
-      name: "Admin-generated",
-      keyHash,
-      keyPrefix: apiKey.slice(0, 7),
-    });
+    const apiKey = await createApiKeyForUser(db, user.id, "Admin-generated");
 
     return c.json({
       user: {
@@ -199,15 +177,9 @@ admin.get("/waitlist", async (c) => {
     const db = createDb(c.env.DATABASE_URL);
     const status = c.req.query("status");
 
-    const VALID_STATUSES = ["pending", "approved", "rejected"];
-    if (status && !VALID_STATUSES.includes(status)) {
+    if (status && !isWaitlistStatus(status)) {
       return c.json({ error: "Invalid status parameter. Must be: pending, approved, or rejected" }, 400);
     }
-
-    let query = db
-      .select()
-      .from(waitlist)
-      .orderBy(desc(waitlist.createdAt));
 
     const entries = status
       ? await db
@@ -215,30 +187,16 @@ admin.get("/waitlist", async (c) => {
           .from(waitlist)
           .where(eq(waitlist.status, status))
           .orderBy(desc(waitlist.createdAt))
-      : await query;
+      : await db
+          .select()
+          .from(waitlist)
+          .orderBy(desc(waitlist.createdAt));
 
-    const pendingResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(waitlist)
-      .where(eq(waitlist.status, "pending"));
-
-    const approvedResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(waitlist)
-      .where(eq(waitlist.status, "approved"));
-
-    const rejectedResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(waitlist)
-      .where(eq(waitlist.status, "rejected"));
+    const stats = await getWaitlistStats(db);
 
     return c.json({
       entries,
-      stats: {
-        pending: pendingResult[0]?.count ?? 0,
-        approved: approvedResult[0]?.count ?? 0,
-        rejected: rejectedResult[0]?.count ?? 0,
-      },
+      stats,
     });
   } catch (error) {
     console.error("Failed to fetch waitlist:", error);
@@ -256,89 +214,30 @@ admin.post("/waitlist/:id/approve", async (c) => {
   try {
     const db = createDb(c.env.DATABASE_URL);
 
-    const [entry] = await db
-      .select()
-      .from(waitlist)
-      .where(eq(waitlist.id, id));
-
-    if (!entry) {
-      return c.json({ error: "Waitlist entry not found" }, 404);
+    const pendingEntry = await getPendingWaitlistEntry(db, id);
+    if (!pendingEntry.ok) {
+      return c.json({ error: pendingEntry.error }, pendingEntry.status);
     }
 
-    if (entry.status !== "pending") {
-      return c.json({ error: "Entry has already been processed" }, 400);
-    }
-
-    const [existingUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, entry.email));
+    const existingUser = await findUserByEmail(db, pendingEntry.entry.email);
 
     if (existingUser) {
       return c.json({ error: "User with this email already exists" }, 400);
     }
 
-    const result = await db
-      .insert(users)
-      .values({
-        email: entry.email,
-        name: entry.name,
-      })
-      .returning();
-
-    const newUser = result[0]!;
-
-    const apiKey = `sk_${nanoid(32)}`;
-    const keyHash = await hashApiKey(apiKey);
-
-    await db.insert(apiKeys).values({
-      userId: newUser.id,
-      name: "Default",
-      keyHash,
-      keyPrefix: apiKey.slice(0, 7),
+    const result = await createUserWithApiKey(db, {
+      email: pendingEntry.entry.email,
+      name: pendingEntry.entry.name,
+      keyName: "Default",
     });
 
     try {
       const resend = new Resend(c.env.RESEND_API_KEY);
       await resend.emails.send({
         from: "formality.life <noreply@formality.life>",
-        to: entry.email,
+        to: pendingEntry.entry.email,
         subject: "Welcome to formality.life - You're In!",
-        html: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #000000; padding: 40px 20px;">
-            <div style="max-width: 480px; margin: 0 auto;">
-              <div style="text-align: center; margin-bottom: 32px;">
-                <h1 style="font-size: 28px; font-weight: 600; color: #fafafa; margin: 0;">
-                  Welcome to <span style="color: #D946EF;">formality.life</span>
-                </h1>
-              </div>
-
-              <div style="background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 12px; padding: 32px;">
-                <p style="color: #a1a1aa; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
-                  Your application has been approved! You now have access to formality.life's image hosting platform.
-                </p>
-
-                <div style="background: rgba(217, 70, 239, 0.08); border-left: 3px solid #D946EF; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
-                  <p style="color: #a1a1aa; font-size: 13px; margin: 0; line-height: 1.5;">
-                    <strong style="color: #fafafa;">First step:</strong> After signing in, create an API key from your dashboard settings to start uploading images.
-                  </p>
-                </div>
-
-                <div style="text-align: center;">
-                  <a href="https://formality.life/" style="display: inline-block; background: #D946EF; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
-                    Sign In
-                  </a>
-                </div>
-              </div>
-
-              <div style="text-align: center; margin-top: 32px;">
-                <p style="color: #525252; font-size: 13px; margin: 0;">
-                  Need help getting started? Check out our <a href="https://formality.life/docs" style="color: #D946EF; text-decoration: none;">documentation</a>.
-                </p>
-              </div>
-            </div>
-          </div>
-        `,
+        html: welcomeEmailHtml(),
       });
     } catch (emailError) {
       console.error("Failed to send welcome email:", emailError);
@@ -354,12 +253,12 @@ admin.post("/waitlist/:id/approve", async (c) => {
 
     return c.json({
       user: {
-        id: newUser!.id,
-        email: newUser!.email,
-        name: newUser!.name,
-        createdAt: newUser!.createdAt,
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        createdAt: result.user.createdAt,
       },
-      apiKey,
+      apiKey: result.apiKey,
     });
   } catch (error) {
     console.error("Failed to approve waitlist entry:", error);
@@ -377,17 +276,9 @@ admin.post("/waitlist/:id/reject", async (c) => {
   try {
     const db = createDb(c.env.DATABASE_URL);
 
-    const [entry] = await db
-      .select()
-      .from(waitlist)
-      .where(eq(waitlist.id, id));
-
-    if (!entry) {
-      return c.json({ error: "Waitlist entry not found" }, 404);
-    }
-
-    if (entry.status !== "pending") {
-      return c.json({ error: "Entry has already been processed" }, 400);
+    const pendingEntry = await getPendingWaitlistEntry(db, id);
+    if (!pendingEntry.ok) {
+      return c.json({ error: pendingEntry.error }, pendingEntry.status);
     }
 
     await db
@@ -457,23 +348,10 @@ admin.get("/domains", async (c) => {
       .orderBy(desc(domains.createdAt));
 
     const domainsWithStatus = await Promise.all(
-      allDomains.map(async (domain) => {
-        if (domain.isDefault || domain.isWorkerDomain) {
-          return { ...domain, isConfigured: true, status: "active", sslStatus: "active" };
-        }
-
-        if (!domain.cloudflareHostnameId) {
-          return { ...domain, isConfigured: false, status: "not_registered", sslStatus: "not_registered" };
-        }
-
-        const status = await cf.checkHostnameStatus(domain.domain);
-        return {
-          ...domain,
-          isConfigured: status.isConfigured,
-          status: status.status,
-          sslStatus: status.sslStatus,
-        };
-      })
+      allDomains.map(async (domain) => ({
+        ...domain,
+        ...(await resolveDomainStatus(domain, cf)),
+      }))
     );
 
     return c.json({ domains: domainsWithStatus });
@@ -493,7 +371,7 @@ admin.post("/domains", async (c) => {
       return c.json({ error: "Domain is required" }, 400);
     }
 
-    const domainName = body.domain.toLowerCase().trim();
+    const domainName = normalizeDomain(body.domain);
 
     const [existing] = await db
       .select()

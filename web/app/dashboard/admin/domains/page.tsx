@@ -4,26 +4,12 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminDomainsQuery, adminClient } from "@/lib/api";
+import type { AdminDomain } from "@/lib/api";
 import { useToast, Button, Input, Badge, Card } from "@/components/ui";
 import * as motion from "motion/react-client";
 import { fadeInUp, fadeIn, transition } from "@/lib/motion";
 
-interface DomainStatus {
-  id: string;
-  domain: string;
-  isDefault: boolean;
-  isActive: boolean;
-  isConfigured: boolean;
-  status: string;
-  sslStatus: string;
-  createdAt: string;
-  ownerId: string | null;
-  ownerEmail: string | null;
-  visibility: string;
-  isApproved: boolean;
-}
-
-function getStatusInfo(domain: DomainStatus): {
+function getStatusInfo(domain: AdminDomain): {
   color: string;
   label: string;
   description: string;
@@ -119,7 +105,7 @@ export default function DomainsPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["admin", "domains"] });
       toast("Domain deleted");
-    } catch (err: unknown) {
+    } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to delete domain";
       toast(message);
     }
@@ -229,10 +215,9 @@ export default function DomainsPage() {
           ) : (
             <div className="space-y-3">
               {domainsData?.domains?.map((domain) => {
-                const statusInfo = getStatusInfo(domain as DomainStatus);
-                const typedDomain = domain as DomainStatus;
-                const isUserDomain = typedDomain.ownerId !== null;
-                const needsApproval = isUserDomain && typedDomain.visibility === "public" && !typedDomain.isApproved;
+                const statusInfo = getStatusInfo(domain);
+                const isUserDomain = domain.ownerId !== null;
+                const needsApproval = isUserDomain && domain.visibility === "public" && !domain.isApproved;
                 return (
                   <Card key={domain.id} className="p-4">
                     <div className="flex items-center justify-between">
@@ -251,8 +236,8 @@ export default function DomainsPage() {
                               {statusInfo.label}
                             </Badge>
                             {isUserDomain && (
-                              <Badge variant={typedDomain.visibility === "private" ? "default" : "accent"}>
-                                {typedDomain.visibility === "private" ? "Private" : "Public"}
+                              <Badge variant={domain.visibility === "private" ? "default" : "accent"}>
+                                {domain.visibility === "private" ? "Private" : "Public"}
                               </Badge>
                             )}
                             {needsApproval && (
@@ -261,7 +246,7 @@ export default function DomainsPage() {
                           </div>
                           <p className="text-xs text-text-muted mt-0.5">
                             {isUserDomain ? (
-                              <>Owner: <span className="text-text-secondary">{typedDomain.ownerEmail}</span> &middot; </>
+                              <>Owner: <span className="text-text-secondary">{domain.ownerEmail}</span> &middot; </>
                             ) : (
                               <>Owner: <span className="text-accent">Admin</span> &middot; </>
                             )}
@@ -289,7 +274,7 @@ export default function DomainsPage() {
                             Approve
                           </Button>
                         )}
-                        {isUserDomain && typedDomain.visibility === "public" && typedDomain.isApproved && (
+                        {isUserDomain && domain.visibility === "public" && domain.isApproved && (
                           <Button
                             variant="ghost"
                             size="sm"

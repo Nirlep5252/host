@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   useAdminApproveWaitlist,
@@ -8,9 +7,14 @@ import {
   useAdminDeleteWaitlist,
 } from "@/lib/api";
 import type { WaitlistEntry } from "@/lib/api";
-import { Button } from "@/components/ui";
+import { useTemporaryState } from "@/lib/hooks/use-temporary-state";
 import * as motion from "motion/react-client";
-import { AnimatePresence } from "motion/react";
+import {
+  ApiKeyResultDialog,
+  formatAdminDate,
+  getAvatarColor,
+  getInitials,
+} from "./admin-ui";
 
 interface WaitlistTableProps {
   entries: WaitlistEntry[];
@@ -24,56 +28,17 @@ type ActionState = {
   user?: { email: string; name: string | null };
 };
 
-function getAvatarColor(email: string): string {
-  const colors = [
-    "bg-violet-500/20 text-violet-400",
-    "bg-blue-500/20 text-blue-400",
-    "bg-cyan-500/20 text-cyan-400",
-    "bg-emerald-500/20 text-emerald-400",
-    "bg-amber-500/20 text-amber-400",
-    "bg-rose-500/20 text-rose-400",
-    "bg-pink-500/20 text-pink-400",
-    "bg-indigo-500/20 text-indigo-400",
-  ];
-  const index = email
-    .split("")
-    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[index % colors.length];
-}
-
-function getInitials(email: string, name?: string | null): string {
-  if (name) {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  }
-  return email.slice(0, 2).toUpperCase();
-}
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-}
-
 export function WaitlistTable({ entries, onCopyKey }: WaitlistTableProps) {
   const { adminKey } = useAuth();
   const approveMutation = useAdminApproveWaitlist(adminKey || "");
   const rejectMutation = useAdminRejectWaitlist(adminKey || "");
   const deleteMutation = useAdminDeleteWaitlist(adminKey || "");
-  const [actionState, setActionState] = useState<ActionState | null>(null);
-  const [copied, setCopied] = useState(false);
+  const {
+    value: actionState,
+    setValue: setActionState,
+    setTemporaryValue: setTemporaryActionState,
+    reset: resetActionState,
+  } = useTemporaryState<ActionState | null>(null, 3000);
 
   const handleApprove = async (entry: WaitlistEntry) => {
     if (actionState?.type === "approve" && actionState.entryId === entry.id) {
@@ -85,59 +50,30 @@ export function WaitlistTable({ entries, onCopyKey }: WaitlistTableProps) {
         user: { email: result.user.email, name: result.user.name },
       });
     } else {
-      setActionState({ type: "approve", entryId: entry.id });
-      setTimeout(() => {
-        setActionState((current) =>
-          current?.type === "approve" && current.entryId === entry.id
-            ? null
-            : current
-        );
-      }, 3000);
+      setTemporaryActionState({ type: "approve", entryId: entry.id });
     }
   };
 
   const handleReject = async (entryId: string) => {
     if (actionState?.type === "reject" && actionState.entryId === entryId) {
       await rejectMutation.mutateAsync(entryId);
-      setActionState(null);
+      resetActionState();
     } else {
-      setActionState({ type: "reject", entryId });
-      setTimeout(() => {
-        setActionState((current) =>
-          current?.type === "reject" && current.entryId === entryId
-            ? null
-            : current
-        );
-      }, 3000);
+      setTemporaryActionState({ type: "reject", entryId });
     }
   };
 
   const handleDelete = async (entryId: string) => {
     if (actionState?.type === "delete" && actionState.entryId === entryId) {
       await deleteMutation.mutateAsync(entryId);
-      setActionState(null);
+      resetActionState();
     } else {
-      setActionState({ type: "delete", entryId });
-      setTimeout(() => {
-        setActionState((current) =>
-          current?.type === "delete" && current.entryId === entryId
-            ? null
-            : current
-        );
-      }, 3000);
+      setTemporaryActionState({ type: "delete", entryId });
     }
   };
 
-  const handleCopyKey = async (key: string) => {
-    await navigator.clipboard.writeText(key);
-    setCopied(true);
-    onCopyKey?.(key);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const closeKeyResult = () => {
-    setActionState(null);
-    setCopied(false);
+    resetActionState();
   };
 
   const getStatusBadge = (status: WaitlistEntry["status"]) => {
@@ -221,7 +157,7 @@ export function WaitlistTable({ entries, onCopyKey }: WaitlistTableProps) {
             {/* Footer: Date + Actions */}
             <div className="flex items-center justify-between">
               <span className="text-xs text-text-muted">
-                {formatDate(entry.createdAt)}
+                {formatAdminDate(entry.createdAt)}
               </span>
 
               {entry.status === "pending" && (
@@ -329,103 +265,14 @@ export function WaitlistTable({ entries, onCopyKey }: WaitlistTableProps) {
         ))}
       </div>
 
-      {/* Key Result Modal */}
-      <AnimatePresence>
-        {actionState?.type === "key-result" && actionState.key && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-primary/80 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-[--radius-lg] border border-border-default bg-bg-secondary p-6 shadow-2xl"
-            >
-              <div className="space-y-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <svg
-                      className="h-5 w-5 text-success"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-text-primary">
-                      User Created
-                    </h2>
-                    <p className="text-sm text-text-muted">
-                      {actionState.user?.email}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium uppercase tracking-wider text-text-muted">
-                    API Key
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 break-all rounded-[--radius-md] bg-bg-tertiary px-3 py-2.5 font-mono text-sm text-accent">
-                      {actionState.key}
-                    </code>
-                    <button
-                      onClick={() => handleCopyKey(actionState.key!)}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[--radius-md] bg-bg-tertiary text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                    >
-                      {copied ? (
-                        <svg
-                          className="h-4 w-4 text-success"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-[--radius-md] border border-warning/20 bg-warning/5 px-3 py-2.5">
-                  <p className="text-xs text-warning">
-                    Share this API key with the user. It won&apos;t be shown
-                    again.
-                  </p>
-                </div>
-
-                <Button variant="primary" className="w-full" onClick={closeKeyResult}>
-                  Done
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ApiKeyResultDialog
+        apiKey={actionState?.type === "key-result" ? actionState.key ?? null : null}
+        title="User Created"
+        subtitle={actionState?.type === "key-result" ? actionState.user?.email ?? "" : ""}
+        warning="Share this API key with the user. It won't be shown again."
+        onCopied={onCopyKey}
+        onClose={closeKeyResult}
+      />
     </>
   );
 }

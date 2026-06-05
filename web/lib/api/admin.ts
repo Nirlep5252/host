@@ -11,6 +11,7 @@ import type {
   AdminApproveWaitlistResponse,
   AdminRejectWaitlistResponse,
   AdminDeleteWaitlistResponse,
+  AdminDomainsResponse,
 } from "./types";
 
 type RequestOptions = {
@@ -197,21 +198,6 @@ export function useAdminDeleteWaitlist(adminKey: string) {
       queryClient.invalidateQueries({ queryKey: adminKeys.waitlist() });
     },
   });
-}
-
-interface AdminDomain {
-  id: string;
-  domain: string;
-  isDefault: boolean;
-  isActive: boolean;
-  isConfigured: boolean;
-  status: string;
-  sslStatus: string;
-  createdAt: string;
-}
-
-interface AdminDomainsResponse {
-  domains: AdminDomain[];
 }
 
 export function adminDomainsQuery(adminKey: string) {

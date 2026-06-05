@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { AdminTokenDialog } from "@/components/dashboard/admin-token-dialog";
 
 export default function AdminLayout({
@@ -12,21 +12,12 @@ export default function AdminLayout({
 }) {
   const { isAdmin, adminKey, isLoading } = useAuth();
   const router = useRouter();
-  const [showDialog, setShowDialog] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAdmin) {
       router.push("/dashboard");
     }
   }, [isAdmin, isLoading, router]);
-
-  useEffect(() => {
-    if (!isLoading && isAdmin && !adminKey) {
-      setShowDialog(true);
-    } else if (adminKey) {
-      setShowDialog(false);
-    }
-  }, [isAdmin, adminKey, isLoading]);
 
   if (isLoading) {
     return (
@@ -40,8 +31,8 @@ export default function AdminLayout({
     return null;
   }
 
-  if (showDialog) {
-    return <AdminTokenDialog onSuccess={() => setShowDialog(false)} />;
+  if (!adminKey) {
+    return <AdminTokenDialog />;
   }
 
   return <>{children}</>;

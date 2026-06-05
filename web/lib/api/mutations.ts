@@ -24,7 +24,8 @@ export function useUploadImage(apiKey: string) {
         throw new Error(error.error || "Upload failed");
       }
 
-      return response.json() as Promise<UploadResponse>;
+      const uploadResponse: UploadResponse = await response.json();
+      return uploadResponse;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: imageKeys.lists() });

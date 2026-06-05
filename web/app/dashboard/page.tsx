@@ -8,20 +8,12 @@ import { ImageGrid } from "@/components/dashboard/image-grid";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 import { fadeIn, scaleIn, transition } from "@/lib/motion";
-
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes <= 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
-function getProgressColor(percent: number): string {
-  if (percent >= 90) return "bg-error";
-  if (percent >= 75) return "bg-warning";
-  return "bg-accent";
-}
+import {
+  formatBytes,
+  getStorageProgressColor,
+  getStorageUsageTextColor,
+  getUsagePercent,
+} from "@/lib/format";
 
 export default function DashboardPage() {
   const { user, apiKey } = useAuth();
@@ -39,7 +31,7 @@ export default function DashboardPage() {
         toast("Uploaded! URL copied to clipboard");
         setIsUploadExpanded(false);
       } catch {
-        toast("Upload failed. Please try again.", "error" as any);
+        toast("Upload failed. Please try again.", "error");
       }
     },
     [uploadMutation, toast]
@@ -103,6 +95,15 @@ export default function DashboardPage() {
     toast("URL copied to clipboard");
   };
 
+  const storage =
+    user?.storageBytes !== undefined && user?.storageLimitBytes !== undefined
+      ? {
+          bytes: user.storageBytes,
+          limitBytes: user.storageLimitBytes,
+          usagePercent: getUsagePercent(user.storageBytes, user.storageLimitBytes),
+        }
+      : null;
+
   return (
     <div
       className="relative min-h-[calc(100vh-4rem)]"
@@ -119,18 +120,18 @@ export default function DashboardPage() {
           <p className="mt-1 text-sm text-text-muted">
             {user?.imageCount || 0} images in your library
           </p>
-          {user?.storageBytes !== undefined && user?.storageLimitBytes !== undefined && (
+          {storage && (
             <div className="mt-2">
               <div className="flex items-center gap-2 text-xs text-text-muted">
-                <span>{formatBytes(user.storageBytes)} / {formatBytes(user.storageLimitBytes)} used</span>
-                <span className={Math.round((user.storageBytes / user.storageLimitBytes) * 100) >= 90 ? "text-error" : Math.round((user.storageBytes / user.storageLimitBytes) * 100) >= 75 ? "text-warning" : ""}>
-                  ({Math.round((user.storageBytes / user.storageLimitBytes) * 100)}%)
+                <span>{formatBytes(storage.bytes)} / {formatBytes(storage.limitBytes)} used</span>
+                <span className={getStorageUsageTextColor(storage.usagePercent)}>
+                  ({storage.usagePercent}%)
                 </span>
               </div>
               <div className="mt-1.5 h-1.5 w-48 overflow-hidden rounded-full bg-bg-tertiary">
                 <div
-                  className={`h-full rounded-full transition-all ${getProgressColor(Math.round((user.storageBytes / user.storageLimitBytes) * 100))}`}
-                  style={{ width: `${Math.min((user.storageBytes / user.storageLimitBytes) * 100, 100)}%` }}
+                  className={`h-full rounded-full transition-all ${getStorageProgressColor(storage.usagePercent)}`}
+                  style={{ width: `${storage.usagePercent}%` }}
                 />
               </div>
             </div>

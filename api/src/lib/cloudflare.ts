@@ -63,7 +63,9 @@ export class CloudflareAPI {
       },
     });
 
-    return response.json() as Promise<CloudflareResponse<T>>;
+    // Cloudflare's REST envelope is endpoint-generic; callers provide the
+    // result shape they requested while the common envelope stays centralized.
+    return (await response.json()) as CloudflareResponse<T>;
   }
 
   async createCustomHostname(hostname: string): Promise<{

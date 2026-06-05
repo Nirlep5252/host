@@ -11,6 +11,9 @@ import {
   StatsCard,
   ImageCard,
 } from "@/components/ui";
+import { useTemporaryFlag } from "@/lib/hooks/use-temporary-state";
+
+const ignoreImageAction = () => {};
 
 function Section({
   children,
@@ -45,12 +48,11 @@ function ColorSwatch({
   value: string;
   textColor?: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const { active: copied, activate: markCopied } = useTemporaryFlag(1500);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    markCopied();
   };
 
   return (
@@ -295,23 +297,23 @@ export default function DesignSystemPage() {
                   id="1"
                   filename="abc123.png"
                   size="2.4 MB"
-                  onCopy={(id) => console.log("Copy:", id)}
-                  onDelete={(id) => console.log("Delete:", id)}
+                  onCopy={ignoreImageAction}
+                  onDelete={ignoreImageAction}
                 />
                 <ImageCard
                   id="2"
                   filename="def456.jpg"
                   size="1.8 MB"
                   isPrivate
-                  onCopy={(id) => console.log("Copy:", id)}
-                  onDelete={(id) => console.log("Delete:", id)}
+                  onCopy={ignoreImageAction}
+                  onDelete={ignoreImageAction}
                 />
                 <ImageCard
                   id="3"
                   filename="ghi789.webp"
                   size="856 KB"
-                  onCopy={(id) => console.log("Copy:", id)}
-                  onDelete={(id) => console.log("Delete:", id)}
+                  onCopy={ignoreImageAction}
+                  onDelete={ignoreImageAction}
                 />
               </div>
             </div>

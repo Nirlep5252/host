@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- User images can be private, tokenized, or served from arbitrary custom domains, so they should not be proxied through Next Image. */
+
 import { useState, useCallback } from "react";
 
 const DEFAULT_DOMAIN = "formality.life";
@@ -28,6 +30,7 @@ export function FallbackImage({
   isPrivate,
   token,
   onFallback,
+  alt = "",
   ...props
 }: FallbackImageProps) {
   const [currentSrc, setCurrentSrc] = useState(src);
@@ -46,6 +49,7 @@ export function FallbackImage({
     <img
       {...props}
       src={currentSrc}
+      alt={alt}
       onError={handleError}
     />
   );

@@ -123,3 +123,23 @@ export interface AdminRejectWaitlistResponse {
 export interface AdminDeleteWaitlistResponse {
   success: boolean;
 }
+
+export interface AdminDomain {
+  id: string;
+  domain: string;
+  isDefault: boolean;
+  isActive: boolean;
+  isWorkerDomain: boolean;
+  isConfigured: boolean;
+  status: string;
+  sslStatus: string;
+  createdAt: string;
+  ownerId: string | null;
+  ownerEmail: string | null;
+  visibility: string;
+  isApproved: boolean;
+}
+
+export interface AdminDomainsResponse {
+  domains: AdminDomain[];
+}

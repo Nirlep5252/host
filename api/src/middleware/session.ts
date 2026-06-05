@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { createDb, type User, type Session } from "../db";
+import { createDb, type Session, type User } from "../db";
 import { createAuth } from "../lib/auth";
 import type { Bindings } from "../types";
 
@@ -20,6 +20,8 @@ export const sessionMiddleware = createMiddleware<{
       headers: c.req.raw.headers,
     });
 
+    // Better Auth returns our database-backed rows, but its generated type is
+    // narrower than the Drizzle-inferred app contract used by Hono variables.
     c.set("session", (sessionData?.session as Session) || null);
     c.set("sessionUser", (sessionData?.user as User) || null);
   } catch {

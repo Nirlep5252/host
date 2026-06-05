@@ -20,6 +20,8 @@ export async function getFile(
   if (!object) return null;
 
   return {
+    // Cloudflare's Worker stream type is structurally compatible at runtime,
+    // but it is not assignable to the DOM ReadableStream type used downstream.
     body: object.body as unknown as ReadableStream,
     contentType: object.httpMetadata?.contentType || "application/octet-stream",
   };

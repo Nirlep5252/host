@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef } from "react";
+import { useState } from "react";
 
 export interface ToggleProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onChange"> {
@@ -12,14 +13,21 @@ export interface ToggleProps
 const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(
   ({ className = "", checked, defaultChecked, onChange, ...props }, ref) => {
     const isControlled = checked !== undefined;
+    const [uncontrolledChecked, setUncontrolledChecked] = useState(
+      defaultChecked ?? false
+    );
 
     const handleClick = () => {
+      const nextChecked = !(isControlled ? checked : uncontrolledChecked);
+      if (!isControlled) {
+        setUncontrolledChecked(nextChecked);
+      }
       if (onChange) {
-        onChange(!checked);
+        onChange(nextChecked);
       }
     };
 
-    const isChecked = isControlled ? checked : undefined;
+    const isChecked = isControlled ? checked : uncontrolledChecked;
 
     return (
       <button
