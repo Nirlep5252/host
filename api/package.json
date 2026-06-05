@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "wrangler dev --port ${PORT:-8787}",
     "typecheck": "tsc --noEmit",
+    "db:check": "drizzle-kit check --config drizzle.config.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "bun scripts/migrate.mjs",
     "deploy": "wrangler deploy --keep-vars",
     "deploy:dry-run": "wrangler deploy --keep-vars --dry-run"
   },

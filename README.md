@@ -86,8 +86,9 @@ bun run dev
 
 ```bash
 cd api
-bun run db:generate  # Generate migrations
-bun run db:push      # Push to database
+bun run db:check     # Validate migration files
+bun run db:generate  # Generate a migration after schema changes
+bun run db:migrate   # Apply pending migrations to DATABASE_URL
 ```
 
 ### Deploy
@@ -107,11 +108,14 @@ Add these GitHub Actions secrets before enabling the workflow:
 ```env
 CLOUDFLARE_ACCOUNT_ID=...
 CLOUDFLARE_API_TOKEN_DEPLOY=...
+DATABASE_URL=...
 ```
 
 `CLOUDFLARE_API_TOKEN_DEPLOY` is only for CI deployment. Keep the runtime Worker `CLOUDFLARE_API_TOKEN` binding separate because the app uses it for custom-domain Cloudflare API calls.
 
 The deploy token should be scoped to the Cloudflare account that owns the Worker. Start with Cloudflare's Workers edit permissions, plus R2 permissions if Wrangler requires them for the `R2` binding. Do not use a global API key.
+
+`DATABASE_URL` is used by the deploy workflow to run production migrations before the Worker deploys. Store it as a GitHub production environment secret if that environment is protected.
 
 The runtime Worker variables/secrets still need to exist in Cloudflare:
 
