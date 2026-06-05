@@ -94,6 +94,46 @@ bun run db:push      # Push to database
 
 ### Deploy
 
+#### Backend CI/CD
+
+Backend deployment is handled by GitHub Actions in `.github/workflows/api-deploy.yml`.
+
+- Pull requests that touch `api/**` run API validation.
+- Pushes to `main` that touch `api/**` validate and deploy the Worker.
+- Manual runs deploy only when started from the `main` branch.
+- Production deploys are serialized with an `api-production` concurrency group.
+- The deploy job targets the GitHub `production` environment. Configure required reviewers there if production should require manual approval.
+
+Add these GitHub Actions secrets before enabling the workflow:
+
+```env
+CLOUDFLARE_ACCOUNT_ID=...
+CLOUDFLARE_API_TOKEN_DEPLOY=...
+```
+
+`CLOUDFLARE_API_TOKEN_DEPLOY` is only for CI deployment. Keep the runtime Worker `CLOUDFLARE_API_TOKEN` binding separate because the app uses it for custom-domain Cloudflare API calls.
+
+The deploy token should be scoped to the Cloudflare account that owns the Worker. Start with Cloudflare's Workers edit permissions, plus R2 permissions if Wrangler requires them for the `R2` binding. Do not use a global API key.
+
+The runtime Worker variables/secrets still need to exist in Cloudflare:
+
+```env
+DATABASE_URL=...
+ADMIN_KEY=...
+ADMIN_EMAIL=...
+TOKEN_SECRET=...
+RESEND_API_KEY=...
+BETTER_AUTH_SECRET=...
+CLOUDFLARE_ZONE_ID=...
+CLOUDFLARE_API_TOKEN=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+FRONTEND_URL=...
+DNS_TARGET=... # optional
+```
+
+The deploy script uses `wrangler deploy --keep-vars` because several runtime bindings are currently managed outside `wrangler.toml`. After all non-secret runtime variables are moved into `wrangler.toml`, `--keep-vars` can be removed and the config file can become the full source of truth.
+
 **API** (Cloudflare Workers)
 
 ```bash

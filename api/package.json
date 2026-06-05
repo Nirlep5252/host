@@ -5,7 +5,9 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev --port ${PORT:-8787}",
-    "deploy": "wrangler deploy"
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy --keep-vars",
+    "deploy:dry-run": "wrangler deploy --keep-vars --dry-run"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251128.0",
