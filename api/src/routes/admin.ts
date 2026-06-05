@@ -14,11 +14,11 @@ import {
   getWaitlistStats,
   isWaitlistStatus,
 } from "../lib/waitlist";
-import type { Bindings } from "../types";
+import type { Bindings, Variables } from "../types";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const admin = new Hono<{ Bindings: Bindings }>();
+const admin = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 admin.use("/*", adminRateLimit);
 admin.use("/*", adminMiddleware);
@@ -63,6 +63,7 @@ admin.get("/users", async (c) => {
         id: users.id,
         email: users.email,
         name: users.name,
+        role: users.role,
         isActive: users.isActive,
         createdAt: users.createdAt,
         storageLimitBytes: users.storageLimitBytes,
@@ -138,7 +139,10 @@ admin.patch("/users/:id", async (c) => {
 
   try {
     const db = createDb(c.env.DATABASE_URL);
-    const body = await c.req.json<{ storageLimitBytes?: number | null }>();
+    const body = await c.req.json<{
+      storageLimitBytes?: number | null;
+      role?: string;
+    }>();
 
     const [user] = await db.select().from(users).where(eq(users.id, id));
 
@@ -155,12 +159,20 @@ admin.patch("/users/:id", async (c) => {
       }
     }
 
+    if (
+      body.role !== undefined &&
+      !["user", "admin"].includes(body.role)
+    ) {
+      return c.json({ error: "Invalid role" }, 400);
+    }
+
     const result = await db
       .update(users)
       .set({
         ...(body.storageLimitBytes !== undefined && {
           storageLimitBytes: body.storageLimitBytes,
         }),
+        ...(body.role !== undefined && { role: body.role }),
       })
       .where(eq(users.id, id))
       .returning();

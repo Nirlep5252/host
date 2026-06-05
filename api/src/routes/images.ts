@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { getFile, deleteFile } from "../storage";
 import { createDb, images, domains } from "../db";
-import { authMiddleware, verifyApiKey } from "../middleware/auth";
+import { authMiddleware, verifyApiKey, verifySessionUser } from "../middleware/auth";
 import { publicImageRateLimit } from "../middleware/rate-limit";
 import { generateImageToken, verifyImageToken } from "../lib/tokens";
 import type { Bindings, Variables } from "../types";
@@ -98,23 +98,30 @@ imagesRoute.get("/:id", publicImageRateLimit, async (c) => {
     if (image.isPrivate) {
       let authorized = false;
 
-      // Try API key header first
+      // Try token query parameter first. Dashboard image URLs use this path, so
+      // browser image tags do not need custom auth headers.
+      const token = c.req.query("token");
+      if (token) {
+        const result = await verifyImageToken(token, id, c.env.TOKEN_SECRET);
+        if (result && result.userId === image.userId) {
+          authorized = true;
+        }
+      }
+
+      // Try API key header for external clients
       const apiKey = c.req.header("X-API-Key");
-      if (apiKey) {
+      if (!authorized && apiKey) {
         const user = await verifyApiKey(db, apiKey);
         if (user && user.id === image.userId) {
           authorized = true;
         }
       }
 
-      // Try token query parameter
+      // Try browser session for same-origin direct image requests
       if (!authorized) {
-        const token = c.req.query("token");
-        if (token) {
-          const result = await verifyImageToken(token, id, c.env.TOKEN_SECRET);
-          if (result && result.userId === image.userId) {
-            authorized = true;
-          }
+        const user = await verifySessionUser(db, c.env, c.req.raw.headers);
+        if (user && user.id === image.userId) {
+          authorized = true;
         }
       }
 

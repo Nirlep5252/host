@@ -3,7 +3,7 @@ import { apiClient, API_BASE_URL } from "./client";
 import { imageKeys } from "./queries";
 import type { UploadResponse, UpdateImageResponse, DeleteImageResponse } from "./types";
 
-export function useUploadImage(apiKey: string) {
+export function useUploadImage() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -14,9 +14,7 @@ export function useUploadImage(apiKey: string) {
       const response = await fetch(`${API_BASE_URL}/upload`, {
         method: "POST",
         body: formData,
-        headers: {
-          "X-API-Key": apiKey,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -33,7 +31,7 @@ export function useUploadImage(apiKey: string) {
   });
 }
 
-export function useUpdateImage(apiKey: string) {
+export function useUpdateImage() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -44,7 +42,7 @@ export function useUpdateImage(apiKey: string) {
       id: string;
       isPrivate: boolean;
     }) => {
-      return apiClient<UpdateImageResponse>(`/i/${id}`, apiKey, {
+      return apiClient<UpdateImageResponse>(`/i/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ isPrivate }),
         headers: {
@@ -59,12 +57,12 @@ export function useUpdateImage(apiKey: string) {
   });
 }
 
-export function useDeleteImage(apiKey: string) {
+export function useDeleteImage() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      return apiClient<DeleteImageResponse>(`/i/${id}`, apiKey, {
+      return apiClient<DeleteImageResponse>(`/i/${id}`, {
         method: "DELETE",
       });
     },

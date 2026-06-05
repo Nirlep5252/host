@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/auth-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminDomainsQuery, adminClient } from "@/lib/api";
 import type { AdminDomain } from "@/lib/api";
@@ -39,7 +38,6 @@ function getStatusInfo(domain: AdminDomain): {
 }
 
 export default function DomainsPage() {
-  const { adminKey, clearAdminKey } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -47,14 +45,14 @@ export default function DomainsPage() {
   const [isCreatingDomain, setIsCreatingDomain] = useState(false);
 
   const { data: domainsData, isLoading, error } = useQuery(
-    adminDomainsQuery(adminKey || "")
+    adminDomainsQuery()
   );
 
   const handleCreateDomain = async () => {
-    if (!newDomain.trim() || !adminKey) return;
+    if (!newDomain.trim()) return;
     setIsCreatingDomain(true);
     try {
-      await adminClient("/admin/domains", adminKey, {
+      await adminClient("/admin/domains", {
         method: "POST",
         body: JSON.stringify({ domain: newDomain.trim() }),
       });
@@ -69,9 +67,8 @@ export default function DomainsPage() {
   };
 
   const handleSetDefault = async (domainId: string) => {
-    if (!adminKey) return;
     try {
-      await adminClient(`/admin/domains/${domainId}`, adminKey, {
+      await adminClient(`/admin/domains/${domainId}`, {
         method: "PATCH",
         body: JSON.stringify({ isDefault: true }),
       });
@@ -83,9 +80,8 @@ export default function DomainsPage() {
   };
 
   const handleToggleActive = async (domainId: string, isActive: boolean) => {
-    if (!adminKey) return;
     try {
-      await adminClient(`/admin/domains/${domainId}`, adminKey, {
+      await adminClient(`/admin/domains/${domainId}`, {
         method: "PATCH",
         body: JSON.stringify({ isActive: !isActive }),
       });
@@ -97,10 +93,9 @@ export default function DomainsPage() {
   };
 
   const handleDeleteDomain = async (domainId: string, domainName: string) => {
-    if (!adminKey) return;
     if (!confirm(`Are you sure you want to delete "${domainName}"?`)) return;
     try {
-      await adminClient(`/admin/domains/${domainId}`, adminKey, {
+      await adminClient(`/admin/domains/${domainId}`, {
         method: "DELETE",
       });
       queryClient.invalidateQueries({ queryKey: ["admin", "domains"] });
@@ -112,9 +107,8 @@ export default function DomainsPage() {
   };
 
   const handleApprove = async (domainId: string, approve: boolean) => {
-    if (!adminKey) return;
     try {
-      await adminClient(`/admin/domains/${domainId}`, adminKey, {
+      await adminClient(`/admin/domains/${domainId}`, {
         method: "PATCH",
         body: JSON.stringify({ isApproved: approve }),
       });
@@ -136,13 +130,6 @@ export default function DomainsPage() {
             Manage domains for image URLs
           </p>
         </div>
-
-        <Button variant="ghost" size="sm" onClick={clearAdminKey}>
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          Lock
-        </Button>
       </div>
 
       {isLoading ? (
@@ -173,7 +160,7 @@ export default function DomainsPage() {
             </svg>
           </div>
           <p className="font-medium text-error">Failed to load domains</p>
-          <p className="mt-1 text-sm text-text-muted">Check your admin key and try again</p>
+          <p className="mt-1 text-sm text-text-muted">Check your admin account access and try again</p>
         </motion.div>
       ) : (
         <motion.div

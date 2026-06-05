@@ -22,18 +22,20 @@ type RequestOptions = {
 
 export async function adminClient<T>(
   endpoint: string,
-  adminKey: string,
   options: RequestOptions = {}
 ): Promise<T> {
   const { method = "GET", body, headers = {} } = options;
+  const requestHeaders: Record<string, string> = { ...headers };
+
+  if (typeof body === "string" && !requestHeaders["Content-Type"]) {
+    requestHeaders["Content-Type"] = "application/json";
+  }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method,
     body,
-    headers: {
-      "X-Admin-Key": adminKey,
-      ...headers,
-    },
+    credentials: "include",
+    headers: requestHeaders,
   });
 
   if (!response.ok) {
@@ -51,26 +53,24 @@ export const adminKeys = {
   domains: () => [...adminKeys.all, "domains"] as const,
 };
 
-export function adminUsersQuery(adminKey: string) {
+export function adminUsersQuery() {
   return queryOptions({
     queryKey: adminKeys.users(),
     queryFn: async () => {
-      return adminClient<AdminUsersResponse>("/admin/users", adminKey);
+      return adminClient<AdminUsersResponse>("/admin/users");
     },
-    enabled: !!adminKey,
     staleTime: 30 * 1000,
   });
 }
 
-export function useAdminCreateUser(adminKey: string) {
+export function useAdminCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (data: AdminCreateUserRequest) => {
-      return adminClient<AdminCreateUserResponse>("/admin/users", adminKey, {
+      return adminClient<AdminCreateUserResponse>("/admin/users", {
         method: "POST",
         body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
       });
     },
     onSuccess: () => {
@@ -79,12 +79,12 @@ export function useAdminCreateUser(adminKey: string) {
   });
 }
 
-export function useAdminDeleteUser(adminKey: string) {
+export function useAdminDeleteUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (userId: string) => {
-      return adminClient<AdminDeleteUserResponse>(`/admin/users/${userId}`, adminKey, {
+      return adminClient<AdminDeleteUserResponse>(`/admin/users/${userId}`, {
         method: "DELETE",
       });
     },
@@ -94,14 +94,13 @@ export function useAdminDeleteUser(adminKey: string) {
   });
 }
 
-export function useAdminCreateKey(adminKey: string) {
+export function useAdminCreateKey() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (userId: string) => {
       return adminClient<AdminCreateKeyResponse>(
         `/admin/users/${userId}/create-key`,
-        adminKey,
         { method: "POST" }
       );
     },
@@ -111,21 +110,22 @@ export function useAdminCreateKey(adminKey: string) {
   });
 }
 
-export function useAdminUpdateUser(adminKey: string) {
+export function useAdminUpdateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       userId,
       storageLimitBytes,
+      role,
     }: {
       userId: string;
-      storageLimitBytes: number | null;
+      storageLimitBytes?: number | null;
+      role?: "user" | "admin";
     }) => {
-      return adminClient<{ user: AdminUser }>(`/admin/users/${userId}`, adminKey, {
+      return adminClient<{ user: AdminUser }>(`/admin/users/${userId}`, {
         method: "PATCH",
-        body: JSON.stringify({ storageLimitBytes }),
-        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storageLimitBytes, role }),
       });
     },
     onSuccess: () => {
@@ -134,28 +134,26 @@ export function useAdminUpdateUser(adminKey: string) {
   });
 }
 
-export function adminWaitlistQuery(adminKey: string, status?: string) {
+export function adminWaitlistQuery(status?: string) {
   return queryOptions({
     queryKey: [...adminKeys.waitlist(), status],
     queryFn: async () => {
       const endpoint = status
         ? `/admin/waitlist?status=${status}`
         : "/admin/waitlist";
-      return adminClient<AdminWaitlistResponse>(endpoint, adminKey);
+      return adminClient<AdminWaitlistResponse>(endpoint);
     },
-    enabled: !!adminKey,
     staleTime: 30 * 1000,
   });
 }
 
-export function useAdminApproveWaitlist(adminKey: string) {
+export function useAdminApproveWaitlist() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (entryId: string) => {
       return adminClient<AdminApproveWaitlistResponse>(
         `/admin/waitlist/${entryId}/approve`,
-        adminKey,
         { method: "POST" }
       );
     },
@@ -166,14 +164,13 @@ export function useAdminApproveWaitlist(adminKey: string) {
   });
 }
 
-export function useAdminRejectWaitlist(adminKey: string) {
+export function useAdminRejectWaitlist() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (entryId: string) => {
       return adminClient<AdminRejectWaitlistResponse>(
         `/admin/waitlist/${entryId}/reject`,
-        adminKey,
         { method: "POST" }
       );
     },
@@ -183,14 +180,13 @@ export function useAdminRejectWaitlist(adminKey: string) {
   });
 }
 
-export function useAdminDeleteWaitlist(adminKey: string) {
+export function useAdminDeleteWaitlist() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (entryId: string) => {
       return adminClient<AdminDeleteWaitlistResponse>(
         `/admin/waitlist/${entryId}`,
-        adminKey,
         { method: "DELETE" }
       );
     },
@@ -200,13 +196,12 @@ export function useAdminDeleteWaitlist(adminKey: string) {
   });
 }
 
-export function adminDomainsQuery(adminKey: string) {
+export function adminDomainsQuery() {
   return queryOptions({
     queryKey: adminKeys.domains(),
     queryFn: async () => {
-      return adminClient<AdminDomainsResponse>("/admin/domains", adminKey);
+      return adminClient<AdminDomainsResponse>("/admin/domains");
     },
-    enabled: !!adminKey,
     staleTime: 30 * 1000,
   });
 }

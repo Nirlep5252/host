@@ -48,10 +48,10 @@ function getStorageLimit(storageLimitBytes: number | null): number {
 }
 
 export function UserTable({ users, onCopyKey }: UserTableProps) {
-  const { adminKey } = useAuth();
-  const deleteMutation = useAdminDeleteUser(adminKey || "");
-  const createKeyMutation = useAdminCreateKey(adminKey || "");
-  const updateUserMutation = useAdminUpdateUser(adminKey || "");
+  const { user: currentUser } = useAuth();
+  const deleteMutation = useAdminDeleteUser();
+  const createKeyMutation = useAdminCreateKey();
+  const updateUserMutation = useAdminUpdateUser();
   const {
     value: actionState,
     setValue: setActionState,
@@ -76,6 +76,15 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
     } else {
       setTemporaryActionState({ type: "create-key", userId });
     }
+  };
+
+  const handleRoleToggle = async (user: AdminUser) => {
+    if (currentUser?.id === user.id && user.role === "admin") return;
+
+    await updateUserMutation.mutateAsync({
+      userId: user.id,
+      role: user.role === "admin" ? "user" : "admin",
+    });
   };
 
   const closeKeyResult = () => {
@@ -134,11 +143,18 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
               <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${getAvatarColor(user.email)}`}>
                 {getInitials(user.email, user.name)}
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className={`h-1.5 w-1.5 rounded-full ${user.isActive ? "bg-success" : "bg-error"}`} />
-                <span className={`text-xs ${user.isActive ? "text-success" : "text-error"}`}>
-                  {user.isActive ? "Active" : "Inactive"}
-                </span>
+              <div className="flex items-center gap-2">
+                {user.role === "admin" && (
+                  <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                    Admin
+                  </span>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <div className={`h-1.5 w-1.5 rounded-full ${user.isActive ? "bg-success" : "bg-error"}`} />
+                  <span className={`text-xs ${user.isActive ? "text-success" : "text-error"}`}>
+                    {user.isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -180,6 +196,26 @@ export function UserTable({ users, onCopyKey }: UserTableProps) {
               <span className="text-xs text-text-muted">Joined {formatAdminDate(user.createdAt)}</span>
 
               <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  onClick={() => handleRoleToggle(user)}
+                  disabled={
+                    updateUserMutation.isPending ||
+                    (currentUser?.id === user.id && user.role === "admin")
+                  }
+                  className="rounded-[--radius-sm] p-1.5 text-text-muted transition-colors hover:bg-bg-tertiary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  title={
+                    currentUser?.id === user.id && user.role === "admin"
+                      ? "You cannot demote yourself"
+                      : user.role === "admin"
+                        ? "Make user"
+                        : "Make admin"
+                  }
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3l7 4v5c0 4.5-3 8.5-7 9-4-0.5-7-4.5-7-9V7l7-4z" />
+                  </svg>
+                </button>
+
                 {actionState?.type === "create-key" && actionState.userId === user.id ? (
                   <button
                     onClick={() => handleCreateKey(user.id)}

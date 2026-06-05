@@ -16,9 +16,9 @@ import {
 } from "@/lib/format";
 
 export default function DashboardPage() {
-  const { user, apiKey } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const uploadMutation = useUploadImage(apiKey || "");
+  const uploadMutation = useUploadImage();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isUploadExpanded, setIsUploadExpanded] = useState(false);

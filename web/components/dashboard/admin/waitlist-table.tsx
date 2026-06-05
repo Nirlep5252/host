@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth } from "@/lib/auth-context";
 import {
   useAdminApproveWaitlist,
   useAdminRejectWaitlist,
@@ -29,10 +28,9 @@ type ActionState = {
 };
 
 export function WaitlistTable({ entries, onCopyKey }: WaitlistTableProps) {
-  const { adminKey } = useAuth();
-  const approveMutation = useAdminApproveWaitlist(adminKey || "");
-  const rejectMutation = useAdminRejectWaitlist(adminKey || "");
-  const deleteMutation = useAdminDeleteWaitlist(adminKey || "");
+  const approveMutation = useAdminApproveWaitlist();
+  const rejectMutation = useAdminRejectWaitlist();
+  const deleteMutation = useAdminDeleteWaitlist();
   const {
     value: actionState,
     setValue: setActionState,

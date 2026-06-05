@@ -4,8 +4,6 @@ import type { User, Session } from "./db";
 export type Bindings = {
   R2: R2Bucket;
   DATABASE_URL: string;
-  ADMIN_KEY: string;
-  ADMIN_EMAIL: string;
   BASE_URL: string;
   TOKEN_SECRET: string;
   RESEND_API_KEY: string;

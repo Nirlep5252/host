@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button, Input } from "@/components/ui";
-import { useAuth } from "@/lib/auth-context";
 import { useAdminCreateUser } from "@/lib/api";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
@@ -15,8 +14,7 @@ interface CreateUserDialogProps {
 }
 
 export function CreateUserDialog({ isOpen, onClose }: CreateUserDialogProps) {
-  const { adminKey } = useAuth();
-  const createMutation = useAdminCreateUser(adminKey || "");
+  const createMutation = useAdminCreateUser();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);

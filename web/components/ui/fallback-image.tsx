@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- User images can be private, tokenized, or served from arbitrary custom domains, so they should not be proxied through Next Image. */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 
 const DEFAULT_DOMAIN = "formality.life";
 
@@ -33,17 +33,33 @@ export function FallbackImage({
   alt = "",
   ...props
 }: FallbackImageProps) {
-  const [currentSrc, setCurrentSrc] = useState(src);
-  const [hasFallback, setHasFallback] = useState(false);
+  const [fallback, setFallback] = useState<{
+    originalSrc: string;
+    fallbackSrc: string;
+  } | null>(null);
+  const resolvedToken = useMemo(() => {
+    if (token) return token;
+
+    try {
+      return new URL(src).searchParams.get("token") ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }, [src, token]);
+  const hasFallback = fallback?.originalSrc === src;
+  const currentSrc = hasFallback ? fallback.fallbackSrc : src;
 
   const handleError = useCallback(() => {
     if (!hasFallback && domain !== DEFAULT_DOMAIN) {
-      const fallbackUrl = buildUrl(DEFAULT_DOMAIN, imageId, isPrivate ? token : undefined);
-      setCurrentSrc(fallbackUrl);
-      setHasFallback(true);
+      const fallbackUrl = buildUrl(
+        DEFAULT_DOMAIN,
+        imageId,
+        isPrivate ? resolvedToken : undefined
+      );
+      setFallback({ originalSrc: src, fallbackSrc: fallbackUrl });
       onFallback?.(imageId);
     }
-  }, [hasFallback, domain, imageId, isPrivate, token, onFallback]);
+  }, [hasFallback, domain, imageId, isPrivate, resolvedToken, src, onFallback]);
 
   return (
     <img

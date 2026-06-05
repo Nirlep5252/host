@@ -24,21 +24,21 @@ function cleanupExpiredEntries() {
   }
 }
 
-function getRateLimitKey(c: Context, keyType: "apiKey" | "adminKey" | "ip"): string | null {
+function getIpRateLimitKey(c: Context): string {
+  const ip = c.req.header("CF-Connecting-IP") ||
+             c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ||
+             "unknown";
+  return `ip:${ip}`;
+}
+
+function getRateLimitKey(c: Context, keyType: "apiKey" | "ip"): string | null {
   switch (keyType) {
     case "apiKey": {
       const apiKey = c.req.header("X-API-Key");
-      return apiKey ? `api:${apiKey}` : null;
-    }
-    case "adminKey": {
-      const adminKey = c.req.header("X-Admin-Key");
-      return adminKey ? `admin:${adminKey}` : null;
+      return apiKey ? `api:${apiKey}` : getIpRateLimitKey(c);
     }
     case "ip": {
-      const ip = c.req.header("CF-Connecting-IP") ||
-                 c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ||
-                 "unknown";
-      return `ip:${ip}`;
+      return getIpRateLimitKey(c);
     }
   }
 }
@@ -70,7 +70,7 @@ function checkRateLimit(
 export function createRateLimiter(
   maxRequests: number,
   windowMs: number,
-  keyType: "apiKey" | "adminKey" | "ip" = "ip"
+  keyType: "apiKey" | "ip" = "ip"
 ) {
   return createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
     const key = getRateLimitKey(c, keyType);
@@ -102,6 +102,6 @@ export function createRateLimiter(
 }
 
 export const uploadRateLimit = createRateLimiter(30, 60000, "apiKey");
-export const adminRateLimit = createRateLimiter(10, 60000, "adminKey");
+export const adminRateLimit = createRateLimiter(60, 60000, "ip");
 export const publicImageRateLimit = createRateLimiter(100, 60000, "ip");
 export const waitlistRateLimit = createRateLimiter(10, 3600000, "ip"); // 10 per hour

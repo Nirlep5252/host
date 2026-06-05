@@ -3,14 +3,13 @@
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { AdminTokenDialog } from "@/components/dashboard/admin-token-dialog";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAdmin, adminKey, isLoading } = useAuth();
+  const { isAdmin, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -29,10 +28,6 @@ export default function AdminLayout({
 
   if (!isAdmin) {
     return null;
-  }
-
-  if (!adminKey) {
-    return <AdminTokenDialog />;
   }
 
   return <>{children}</>;

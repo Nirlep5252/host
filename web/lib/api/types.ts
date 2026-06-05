@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string | null;
   createdAt: string;
+  role: "user" | "admin";
   imageCount: number;
   isAdmin: boolean;
   apiKeyCount?: number;
@@ -14,6 +15,7 @@ export interface AdminUser {
   id: string;
   email: string;
   name: string | null;
+  role: "user" | "admin";
   isActive: boolean;
   createdAt: string;
   imageCount: number;
@@ -31,11 +33,13 @@ export interface AdminCreateUserRequest {
 }
 
 export interface AdminCreateUserResponse {
-  id: string;
-  email: string;
-  name: string | null;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    createdAt: string;
+  };
   apiKey: string;
-  createdAt: string;
 }
 
 export interface AdminDeleteUserResponse {

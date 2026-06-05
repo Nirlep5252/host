@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@tanstack/react-query";
 import { imagesQuery, useUpdateImage, useDeleteImage } from "@/lib/api";
 import { useState, useCallback } from "react";
@@ -165,7 +164,6 @@ function ImageCard({
 }
 
 export function ImageGrid({ onCopySuccess }: ImageGridProps) {
-  const { apiKey } = useAuth();
   const {
     value: deleteConfirm,
     setTemporaryValue: setTemporaryDeleteConfirm,
@@ -175,9 +173,9 @@ export function ImageGrid({ onCopySuccess }: ImageGridProps) {
   const [fallbackImages, setFallbackImages] = useState<Set<string>>(new Set());
   const { reorderItems } = useMasonryOrder();
 
-  const { data, isLoading, error } = useQuery(imagesQuery(apiKey || ""));
-  const updateMutation = useUpdateImage(apiKey || "");
-  const deleteMutation = useDeleteImage(apiKey || "");
+  const { data, isLoading, error } = useQuery(imagesQuery());
+  const updateMutation = useUpdateImage();
+  const deleteMutation = useDeleteImage();
 
   const allImages = data?.images || [];
 

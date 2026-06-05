@@ -50,6 +50,13 @@
       "when": 1766838925254,
       "tag": "0006_modern_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780641000000,
+      "tag": "0007_add-user-roles",
+      "breakpoints": true
     }
   ]
 }

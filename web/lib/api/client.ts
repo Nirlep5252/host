@@ -1,4 +1,7 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://formality.life";
+const API_BASE_URL =
+  typeof window === "undefined"
+    ? process.env.NEXT_PUBLIC_API_URL || "https://formality.life"
+    : "";
 
 export class ApiError extends Error {
   constructor(
@@ -14,22 +17,25 @@ type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: BodyInit | null;
   headers?: Record<string, string>;
+  apiKey?: string | null;
 };
 
 export async function apiClient<T>(
   endpoint: string,
-  apiKey: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { method = "GET", body, headers = {} } = options;
+  const { method = "GET", body, headers = {}, apiKey } = options;
+  const requestHeaders: Record<string, string> = { ...headers };
+
+  if (apiKey) {
+    requestHeaders["X-API-Key"] = apiKey;
+  }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method,
     body,
-    headers: {
-      "X-API-Key": apiKey,
-      ...headers,
-    },
+    credentials: "include",
+    headers: requestHeaders,
   });
 
   if (!response.ok) {

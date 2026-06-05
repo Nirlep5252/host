@@ -13,7 +13,7 @@ CLOUDFLARE_WORKER_NAME = "sharex-image-host"
 
 # Set secrets via:
 #   wrangler secret put DATABASE_URL
-#   wrangler secret put ADMIN_KEY
+#   wrangler secret put TOKEN_SECRET
 
 [[r2_buckets]]
 binding = "R2"

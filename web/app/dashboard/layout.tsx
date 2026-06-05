@@ -1,21 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Header } from "@/components/dashboard/header";
-import { ApiKeyRequiredModal } from "@/components/dashboard/api-key-required-modal";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const [dismissedApiKeyPromptForUser, setDismissedApiKeyPromptForUser] =
-    useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -38,10 +35,6 @@ export default function DashboardLayout({
     return null;
   }
 
-  const requiresApiKey = (user?.apiKeyCount ?? 0) === 0;
-  const showApiKeyModal =
-    !!user && requiresApiKey && dismissedApiKeyPromptForUser !== user.id;
-
   return (
     <div className="min-h-screen bg-bg-primary">
       <Sidebar />
@@ -49,10 +42,6 @@ export default function DashboardLayout({
         <Header />
         <main className="p-6">{children}</main>
       </div>
-      <ApiKeyRequiredModal
-        isOpen={showApiKeyModal}
-        onComplete={() => setDismissedApiKeyPromptForUser(user?.id ?? null)}
-      />
     </div>
   );
 }
