@@ -1,6 +1,7 @@
 import { Hono } from "hono";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createDb, waitlist, users } from "../db";
+import { notifyAdminsOfWaitlistSignup } from "../lib/waitlist-notifications";
 import { waitlistRateLimit } from "../middleware/rate-limit";
 import type { Bindings } from "../types";
 
@@ -55,6 +56,8 @@ waitlistRoute.post("/", async (c) => {
     }
 
     const db = createDb(c.env.DATABASE_URL);
+    const name = body.name?.trim() || null;
+    const reason = body.reason?.trim() || null;
 
     const [existingUser] = await db
       .select()
@@ -76,8 +79,8 @@ waitlistRoute.post("/", async (c) => {
 
     await db.insert(waitlist).values({
       email,
-      name: body.name?.trim() || null,
-      reason: body.reason?.trim() || null,
+      name,
+      reason,
     });
 
     const countResult = await db
@@ -86,6 +89,17 @@ waitlistRoute.post("/", async (c) => {
       .where(eq(waitlist.status, "pending"));
 
     const count = countResult[0]?.count ?? 0;
+
+    c.executionCtx.waitUntil(
+      notifyAdminsOfWaitlistSignup(db, c.env, {
+        email,
+        name,
+        reason,
+        position: count,
+      }).catch((emailError) => {
+        console.error("Failed to send waitlist notification emails:", emailError);
+      })
+    );
 
     return c.json({
       success: true,

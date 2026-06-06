@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { Resend } from "resend";
 import type { Database } from "../db";
 import * as schema from "../db/schema";
+import { EMAIL_FROM } from "./emails";
 import type { Bindings } from "../types";
 
 const rateLimitMap = new Map<string, number[]>();
@@ -72,7 +73,7 @@ export function createAuth(db: Database, env: Bindings) {
           }
 
           await resend.emails.send({
-            from: "formality.life <noreply@formality.life>",
+            from: EMAIL_FROM,
             to: email,
             subject: "Sign in to formality.life",
             html: `

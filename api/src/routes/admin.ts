@@ -7,7 +7,7 @@ import { adminRateLimit } from "../middleware/rate-limit";
 import { CloudflareAPI } from "../lib/cloudflare";
 import { createApiKeyForUser } from "../lib/api-keys";
 import { normalizeDomain, resolveDomainStatus } from "../lib/domains";
-import { welcomeEmailHtml } from "../lib/emails";
+import { EMAIL_FROM, welcomeEmailHtml } from "../lib/emails";
 import { createUserWithApiKey, findUserByEmail } from "../lib/users";
 import {
   getPendingWaitlistEntry,
@@ -246,7 +246,7 @@ admin.post("/waitlist/:id/approve", async (c) => {
     try {
       const resend = new Resend(c.env.RESEND_API_KEY);
       await resend.emails.send({
-        from: "formality.life <noreply@formality.life>",
+        from: EMAIL_FROM,
         to: pendingEntry.entry.email,
         subject: "Welcome to formality.life - You're In!",
         html: welcomeEmailHtml(),
