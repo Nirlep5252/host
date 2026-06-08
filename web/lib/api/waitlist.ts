@@ -12,10 +12,13 @@ interface JoinWaitlistResponse {
   position: number;
 }
 
+const WAITLIST_ENDPOINT =
+  typeof window === "undefined" ? `${API_BASE_URL}/waitlist` : "/api/waitlist";
+
 export async function joinWaitlist(
   data: JoinWaitlistRequest
 ): Promise<JoinWaitlistResponse> {
-  const response = await fetch(`${API_BASE_URL}/waitlist`, {
+  const response = await fetch(WAITLIST_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
